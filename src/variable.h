@@ -17,6 +17,8 @@
 
 #include "stdio.h"
 #include "pointers.h"
+#include <string>
+#include <vector>
 
 namespace SPARTA_NS {
 
@@ -45,6 +47,11 @@ class Variable : protected Pointers {
 
   int int_between_brackets(char *&, int);
   double evaluate_boolean(char *);
+double interpolateBPhi(const std::string& , double , double )
+//    struct Data {
+//               double R, Z, b_phi, b_r, b_z, T_e, n_e, v_e, t_i, n_i, v_i;
+//           };
+//    Data interpolateData(const std::string& filename, double r, double z);
 
  private:
   int me;

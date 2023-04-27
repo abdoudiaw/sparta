@@ -39,6 +39,14 @@
 #include "memory.h"
 #include "error.h"
 
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <limits>
+#include <cmath>
+
 using namespace SPARTA_NS;
 using namespace MathConst;
 
@@ -3867,4 +3875,134 @@ int VarReader::read_scalar(char *str)
   if (n == 0) return 1;
   MPI_Bcast(str,n,MPI_CHAR,0,world);
   return 0;
+}
+
+//
+//Data Variable::interpolateData(const std::string& filename, double r, double z) {
+//    std::vector<Data> data;
+//    std::ifstream file(filename);
+//
+//    if (!file.is_open()) {
+//        std::cerr << "Error opening file." << std::endl;
+//        return Data();
+//    }
+//
+//    std::string line;
+//    while (std::getline(file, line)) {
+//        if (line.empty() || line[0] == '#') {
+//            continue;
+//        }
+//
+//        Data d;
+//        std::istringstream iss(line);
+//        iss >> d.R >> d.Z >> d.b_phi >> d.b_r >> d.b_z >> d.T_e >> d.n_e >> d.v_e >> d.t_i >> d.n_i >> d.v_i;
+//
+//        data.push_back(d);
+//    }
+//
+//    file.close();
+//
+//    Data d00, d01, d10, d11;
+//    double minDist = std::numeric_limits<double>::max();
+//
+//    for (const auto& d : data) {
+//        double dist = std::sqrt(std::pow(r - d.R, 2) + std::pow(z - d.Z, 2));
+//        if (dist < minDist) {
+//            d11 = d10;
+//            d10 = d01;
+//            d01 = d00;
+//            d00 = d;
+//            minDist = dist;
+//        }
+//    }
+//
+//    double x = (r - d00.R) / (d10.R - d00.R);
+//    double y = (z - d00.Z) / (d01.Z - d00.Z);
+//
+//    auto lerp = [](double a, double b, double t) {
+//        return a + (b - a) * t;
+//    };
+//
+//    auto bilinearInterpolation = [&lerp](double x, double y,
+//                                         double f00, double f10,
+//                                         double f01, double f11) {
+//        double t1 = lerp(f00, f10, x);
+//        double t2 = lerp(f01, f11, x);
+//        return lerp(t1, t2, y);
+//    };
+//
+//    Data result;
+//    result.R = r;
+//    result.Z = z;
+//    result.b_phi = bilinearInterpolation(x, y, d00.b_phi, d10.b_phi, d01.b_phi, d11.b_phi);
+//    result.b_r = bilinearInterpolation(x, y, d00.b_r, d10.b_r, d01.b_r, d11.b_r);
+//    result.b_z = bilinearInterpolation(x, y, d00.b_z, d10.b_z, d01.b_z, d11.b_z);
+//    result.T_e = bilinearInterpolation(x, y, d00.T_e, d10.T_e, d01.T_e, d11.T_e);
+//    result.n_e = bilinearInterpolation(x, y, d00.n_e, d10.n_e, d01.n_e, d11.n_e);
+//    result.v_e = bilinearInterpolation(x, y, d00.v_e, d10.v_e, d01.v_e, d11.v_e);
+//    result.t_i = bilinearInterpolation(x, y, d00.t_i, d10.t_i, d01.t_i, d11.t_i);
+//    result.n_i = bilinearInterpolation(x, y, d00.n_i, d10.n_i, d01.n_i, d11.n_i);
+//    result.v_i = bilinearInterpolation(x, y, d00.v_i, d10.v_i, d01.v_i, d11.v_i);
+//
+//    return result;
+//}
+
+double Variable::interpolateBPhi(const std::string& filename, double r, double z) {
+    using Data = std::tuple<double, double, double, double, double, double, double, double, double, double, double, double>;
+    std::vector<Data> data;
+    std::ifstream file(filename);
+
+    if (!file.is_open()) {
+        std::cerr << "Error opening file." << std::endl;
+        return 0.0;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        Data d;
+        std::istringstream iss(line);
+        iss >> std::get<0>(d) >> std::get<1>(d) >> std::get<2>(d) >> std::get<3>(d) >> std::get<4>(d)
+            >> std::get<5>(d) >> std::get<6>(d) >> std::get<7>(d) >> std::get<8>(d) >> std::get<9>(d)
+            >> std::get<10>(d) >> std::get<11>(d);
+
+        data.push_back(d);
+    }
+
+    file.close();
+
+    Data d00, d01, d10, d11;
+    double minDist = std::numeric_limits<double>::max();
+
+    for (const auto& d : data) {
+        double dist = std::sqrt(std::pow(r - std::get<0>(d), 2) + std::pow(z - std::get<1>(d), 2));
+        if (dist < minDist) {
+            d11 = d10;
+            d10 = d01;
+            d01 = d00;
+            d00 = d;
+            minDist = dist;
+        }
+    }
+
+    double x = (r - std::get<0>(d00)) / (std::get<0>(d10) - std::get<0>(d00));
+    double y = (z - std::get<1>(d00)) / (std::get<1>(d01) - std::get<1>(d00));
+
+    auto lerp = [](double a, double b, double t) {
+        return a + (b - a) * t;
+    };
+
+    auto bilinearInterpolation = [&lerp](double x, double y,
+                                         double f00, double f10,
+                                         double f01, double f11) {
+        double t1 = lerp(f00, f10, x);
+        double t2 = lerp(f01, f11, x);
+        return lerp(t1, t2, y);
+    };
+
+    double result_b_phi = bilinearInterpolation(x, y, std::get<2>(d00), std::get<2>(d10), std::get<2>(d01), std::get<2>(d11));
+    return result_b_phi;
 }
