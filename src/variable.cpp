@@ -46,6 +46,19 @@
 #include <vector>
 #include <limits>
 #include <cmath>
+#include <tuple>
+#include <vector>
+#include <limits>
+#include <cmath>
+#include <cstdio>
+#include <iostream>
+
+#include <vector>
+#include <string>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -70,7 +83,7 @@ enum{DONE,ADD,SUBTRACT,MULTIPLY,DIVIDE,CARAT,MODULO,UNARY,
      NOT,EQ,NE,LT,LE,GT,GE,AND,OR,
      SQRT,EXP,LN,LOG,ABS,SIN,COS,TAN,ASIN,ACOS,ATAN,ATAN2,
      RANDOM,NORMAL,CEIL,FLOOR,ROUND,RAMP,STAGGER,LOGFREQ,STRIDE,
-     VDISPLACE,SWIGGLE,CWIGGLE,
+     VDISPLACE,SWIGGLE,CWIGGLE,READFILE,
      VALUE,ARRAY,PARTARRAYDOUBLE,PARTARRAYINT,SPECARRAY};
 
 // customize by adding a special function
@@ -1958,12 +1971,12 @@ double Variable::evaluate(char *str, Tree **tree)
      sqrt(),exp(),ln(),log(),abs(),sin(),cos(),tan(),asin(),acos(),atan(),
      atan2(y,x),random(x,y),normal(x,y),ceil(),floor(),round(),
      ramp(x,y),stagger(x,y),logfreq(x,y,z),stride(x,y,z),
-     vdisplace(x,y),swiggle(x,y,z),cwiggle(x,y,z)
+     vdisplace(x,y),swiggle(x,y,z),cwiggle(x,y,z), readfile(x,y)
 ---------------------------------------------------------------------- */
 
 double Variable::collapse_tree(Tree *tree)
 {
-  double arg1,arg2;
+  double arg1,arg2, arg3;
 
   if (tree->type == VALUE) return tree->value;
   if (tree->type == ARRAY) return 0.0;
@@ -2232,6 +2245,18 @@ double Variable::collapse_tree(Tree *tree)
     return tree->value;
   }
 
+  /* Readfile */
+
+  if (tree->type == READFILE) {
+    arg1 = collapse_tree(tree->left);
+    arg2 = collapse_tree(tree->middle);
+    arg3 = collapse_tree(tree->right);
+    if (tree->left->type != VALUE || tree->right->type != VALUE) return 0.0;
+    tree->type = VALUE;
+    tree->value = readfile(arg1,arg2,arg3);
+    return tree->value;
+  }
+
   // random() or normal() do not become a single collapsed value
 
   if (tree->type == RANDOM) {
@@ -2396,7 +2421,7 @@ double Variable::collapse_tree(Tree *tree)
      sqrt(),exp(),ln(),log(),sin(),cos(),tan(),asin(),acos(),atan(),
      atan2(y,x),random(x,y),normal(x,y),ceil(),floor(),round(),
      ramp(x,y),stagger(x,y),logfreq(x,y,z),stride(x,y,z),
-     vdisplace(x,y),swiggle(x,y,z),cwiggle(x,y,z)
+     vdisplace(x,y),swiggle(x,y,z),cwiggle(x,y,z), readfile(x,y)
 ---------------------------------------------------------------------- */
 
 double Variable::eval_tree(Tree *tree, int i)
@@ -2521,6 +2546,9 @@ double Variable::eval_tree(Tree *tree, int i)
     return atan(eval_tree(tree->left,i));
   if (tree->type == ATAN2)
     return atan2(eval_tree(tree->left,i),eval_tree(tree->right,i));
+
+  if (tree->type == READFILE)
+    return readfile(eval_tree(tree->left,i),eval_tree(tree->middle,i), eval_tree(tree->right,i));
 
   if (tree->type == RANDOM) {
     double lower = eval_tree(tree->left,i);
@@ -2754,7 +2782,7 @@ int Variable::int_between_brackets(char *&ptr, int varallow)
      sqrt(),exp(),ln(),log(),abs(),sin(),cos(),tan(),asin(),acos(),atan(),
      atan2(y,x),random(x,y),normal(x,y),ceil(),floor(),round(),
      ramp(x,y),stagger(x,y),logfreq(x,y,z),stride(x,y,z),
-     vdisplace(x,y),swiggle(x,y,z),cwiggle(x,y,z)
+     vdisplace(x,y),swiggle(x,y,z),cwiggle(x,y,z), readfile(x,y)
 ------------------------------------------------------------------------- */
 
 int Variable::math_function(char *word, char *contents, Tree **tree,
@@ -2765,7 +2793,7 @@ int Variable::math_function(char *word, char *contents, Tree **tree,
 
   if (strcmp(word,"sqrt") && strcmp(word,"exp") &&
       strcmp(word,"ln") && strcmp(word,"log") &&
-      strcmp(word,"abs") &&
+      strcmp(word,"abs") && strcmp(word, "readfile") &&
       strcmp(word,"sin") && strcmp(word,"cos") &&
       strcmp(word,"tan") && strcmp(word,"asin") &&
       strcmp(word,"acos") && strcmp(word,"atan") &&
@@ -2774,8 +2802,8 @@ int Variable::math_function(char *word, char *contents, Tree **tree,
       strcmp(word,"floor") && strcmp(word,"round") &&
       strcmp(word,"ramp") && strcmp(word,"stagger") &&
       strcmp(word,"logfreq") && strcmp(word,"stride") &&
-      strcmp(word,"vdisplace") &&
-      strcmp(word,"swiggle") && strcmp(word,"cwiggle"))
+      strcmp(word,"vdisplace") && strcmp(word,"readfile") &&
+      strcmp(word,"swiggle") && strcmp(word,"cwiggle")) 
     return 0;
 
   // parse contents for arg1,arg2,arg3 separated by commas
@@ -2931,6 +2959,14 @@ int Variable::math_function(char *word, char *contents, Tree **tree,
       error->all(FLERR,"Invalid math function in variable formula");
     if (tree) newtree->type = ATAN2;
     else argstack[nargstack++] = atan2(value1,value2);
+  }
+
+else if (strcmp(word,"readfile") == 0) {
+    if (narg != 3)
+      error->all(FLERR,"Invalid math function in variable formula");
+    if (tree) newtree->type = READFILE;
+    else argstack[nargstack++] = readfile(value1,value2,value3);
+
 
   } else if (strcmp(word,"random") == 0) {
     if (narg != 2)
@@ -3877,132 +3913,95 @@ int VarReader::read_scalar(char *str)
   return 0;
 }
 
-//
-//Data Variable::interpolateData(const std::string& filename, double r, double z) {
-//    std::vector<Data> data;
-//    std::ifstream file(filename);
-//
-//    if (!file.is_open()) {
-//        std::cerr << "Error opening file." << std::endl;
-//        return Data();
-//    }
-//
-//    std::string line;
-//    while (std::getline(file, line)) {
-//        if (line.empty() || line[0] == '#') {
-//            continue;
-//        }
-//
-//        Data d;
-//        std::istringstream iss(line);
-//        iss >> d.R >> d.Z >> d.b_phi >> d.b_r >> d.b_z >> d.T_e >> d.n_e >> d.v_e >> d.t_i >> d.n_i >> d.v_i;
-//
-//        data.push_back(d);
-//    }
-//
-//    file.close();
-//
-//    Data d00, d01, d10, d11;
-//    double minDist = std::numeric_limits<double>::max();
-//
-//    for (const auto& d : data) {
-//        double dist = std::sqrt(std::pow(r - d.R, 2) + std::pow(z - d.Z, 2));
-//        if (dist < minDist) {
-//            d11 = d10;
-//            d10 = d01;
-//            d01 = d00;
-//            d00 = d;
-//            minDist = dist;
-//        }
-//    }
-//
-//    double x = (r - d00.R) / (d10.R - d00.R);
-//    double y = (z - d00.Z) / (d01.Z - d00.Z);
-//
-//    auto lerp = [](double a, double b, double t) {
-//        return a + (b - a) * t;
-//    };
-//
-//    auto bilinearInterpolation = [&lerp](double x, double y,
-//                                         double f00, double f10,
-//                                         double f01, double f11) {
-//        double t1 = lerp(f00, f10, x);
-//        double t2 = lerp(f01, f11, x);
-//        return lerp(t1, t2, y);
-//    };
-//
-//    Data result;
-//    result.R = r;
-//    result.Z = z;
-//    result.b_phi = bilinearInterpolation(x, y, d00.b_phi, d10.b_phi, d01.b_phi, d11.b_phi);
-//    result.b_r = bilinearInterpolation(x, y, d00.b_r, d10.b_r, d01.b_r, d11.b_r);
-//    result.b_z = bilinearInterpolation(x, y, d00.b_z, d10.b_z, d01.b_z, d11.b_z);
-//    result.T_e = bilinearInterpolation(x, y, d00.T_e, d10.T_e, d01.T_e, d11.T_e);
-//    result.n_e = bilinearInterpolation(x, y, d00.n_e, d10.n_e, d01.n_e, d11.n_e);
-//    result.v_e = bilinearInterpolation(x, y, d00.v_e, d10.v_e, d01.v_e, d11.v_e);
-//    result.t_i = bilinearInterpolation(x, y, d00.t_i, d10.t_i, d01.t_i, d11.t_i);
-//    result.n_i = bilinearInterpolation(x, y, d00.n_i, d10.n_i, d01.n_i, d11.n_i);
-//    result.v_i = bilinearInterpolation(x, y, d00.v_i, d10.v_i, d01.v_i, d11.v_i);
-//
-//    return result;
-//}
 
-double Variable::interpolateBPhi(const std::string& filename, double r, double z) {
-    using Data = std::tuple<double, double, double, double, double, double, double, double, double, double, double, double>;
-    std::vector<Data> data;
-    std::ifstream file(filename);
+double Variable::readfile(double r, double z, int field)
+{
+  int i, m, nwords;
+  char *eof, *word;
+  double **fields;
+  double *R, *Z, *_qoi;
+  /* R,Z,b_phi,b_r,b_z,T_e,n_e,v_e,t_i,n_i,v_i*/
 
-    if (!file.is_open()) {
-        std::cerr << "Error opening file." << std::endl;
-        return 0.0;
+   //declare file name
+  // char file[128];
+  // open file
+  FILE* fp = fopen("data.txt", "r");
+  if (fp == NULL) {
+    error->one(FLERR, "Unable to open file");
+    return 0.0; // return a default value
+  }
+
+  char line[MAXLINE];
+  fgets(line, MAXLINE, fp); // ignore first line
+
+  // initialize n and nfield to appropriate values
+  int n = 29649;
+  int nfield = 11;
+
+  // allocate memory for fields
+  fields = new double*[n];
+  for (i = 0; i < n; i++) {
+    fields[i] = new double[nfield];
+  }
+
+  for (i = 0; i < n; i++) {
+    eof = fgets(line, MAXLINE, fp);
+    if (eof == NULL) {
+    printf("Error: Unexpected end of file at line %d\n", i+1);
+      error->one(FLERR, "Unexpected end of file");
+      return 0.0; // return a default value
+    }
+    nwords = input->count_words(line);
+    if (nwords != nfield) {
+      error->one(FLERR, "Bad line in file");
+      return 0.0; // return a default value
+    }
+    // tokenize the line and convert words to fields
+    for (m = 0; m < nfield; m++) {
+      if (m == 0) word = strtok(line, " \t\n\r\f");
+      else word = strtok(NULL, " \t\n\r\f");
+      if (word == NULL) {
+        error->one(FLERR, "Bad line in file");
+        return 0.0; // return a default value
+      }
+      fields[i][m] = atof(word);
+    }
+  }
+  double minDist = 1e10;
+  int minIndex = 0;
+  for (i = 0; i < n; i++) {
+    R = new double;
+    Z = new double;
+    _qoi = new double;
+
+    *R = fields[i][0];
+    *Z = fields[i][1];
+    *_qoi = fields[i][field];
+
+
+    double dist = sqrt(pow(*R - r, 2) + pow(*Z - z, 2));
+    if (dist < minDist) {
+      minDist = dist;
+      minIndex = i;
     }
 
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.empty() || line[0] == '#') {
-            continue;
-        }
+  delete R;
+  delete Z;
+  delete _qoi;
+  }
 
-        Data d;
-        std::istringstream iss(line);
-        iss >> std::get<0>(d) >> std::get<1>(d) >> std::get<2>(d) >> std::get<3>(d) >> std::get<4>(d)
-            >> std::get<5>(d) >> std::get<6>(d) >> std::get<7>(d) >> std::get<8>(d) >> std::get<9>(d)
-            >> std::get<10>(d) >> std::get<11>(d);
+  double qoi_val = fields[minIndex][field];
+  // print value of qoi
+  
+  // deallocate memory for fields
+  for (i = 0; i < n; i++) {
+  delete [] fields[i];
+  }
+  delete [] fields;
 
-        data.push_back(d);
-    }
-
-    file.close();
-
-    Data d00, d01, d10, d11;
-    double minDist = std::numeric_limits<double>::max();
-
-    for (const auto& d : data) {
-        double dist = std::sqrt(std::pow(r - std::get<0>(d), 2) + std::pow(z - std::get<1>(d), 2));
-        if (dist < minDist) {
-            d11 = d10;
-            d10 = d01;
-            d01 = d00;
-            d00 = d;
-            minDist = dist;
-        }
-    }
-
-    double x = (r - std::get<0>(d00)) / (std::get<0>(d10) - std::get<0>(d00));
-    double y = (z - std::get<1>(d00)) / (std::get<1>(d01) - std::get<1>(d00));
-
-    auto lerp = [](double a, double b, double t) {
-        return a + (b - a) * t;
-    };
-
-    auto bilinearInterpolation = [&lerp](double x, double y,
-                                         double f00, double f10,
-                                         double f01, double f11) {
-        double t1 = lerp(f00, f10, x);
-        double t2 = lerp(f01, f11, x);
-        return lerp(t1, t2, y);
-    };
-
-    double result_b_phi = bilinearInterpolation(x, y, std::get<2>(d00), std::get<2>(d10), std::get<2>(d01), std::get<2>(d11));
-    return result_b_phi;
+  fclose(fp); // close the file
+  return qoi_val;
 }
+
+
+

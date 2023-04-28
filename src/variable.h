@@ -47,7 +47,7 @@ class Variable : protected Pointers {
 
   int int_between_brackets(char *&, int);
   double evaluate_boolean(char *);
-double interpolateBPhi(const std::string& , double , double )
+//    double interpolateBPhi(const std::string& , double , double );
 //    struct Data {
 //               double R, Z, b_phi, b_r, b_z, T_e, n_e, v_e, t_i, n_i, v_i;
 //           };
@@ -93,6 +93,13 @@ double interpolateBPhi(const std::string& , double , double )
     Tree *left,*middle,*right;    // ptrs further down tree
   };
 
+  // void read_file(char *);
+  // void read_file(double , double , char *);
+  // double read_file(double r, double z, char *file);  // change return type to double
+  double readfile(double r, double z, int field);  // change return type to double
+
+  // void processPlasmaData(int , double **);
+  // void read_file(int , int , double **);
   void remove(int);
   void grow();
   void copy(int, char **, char **);

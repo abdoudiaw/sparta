@@ -42,24 +42,78 @@ stats_style	    step cpu np nattempt ncoll c_temp
 # ---------------------------------------
 # added lines for external field
 
+
 species_modify      Ar mu 1e-18
 variable Rmax equal 0.0001
 variable eps equal 1e-6
 
-variable Bx particle "sqrt(x*x + y*y) * sin(x/v_Rmax)"
-variable BxEps particle "sqrt((x+v_eps)*(x+v_eps) + y*y) * sin((x+v_eps)/v_Rmax)"
-variable gradBx particle "mu/mass * (v_BxEps - v_Bx) / v_eps"
+variable xc grid 0.5*(cxlo+cxhi)
+variable yc grid 0.5*(cylo+cyhi)
+variable zc grid 0.5*(czlo+czhi)
 
-variable By particle "sqrt(x*x + y*y) * sin(y/v_Rmax)"
-variable ByEps particle "sqrt(x*x + (y+v_eps)*(y+v_eps)) * sin((y+v_eps)/v_Rmax)"
-variable gradBy particle "mu/mass * (v_ByEps - v_By) / v_eps"
+variable Bx grid "sqrt(v_xc*v_xc + v_yc*v_yc) * sin(v_xc/v_Rmax)"
+variable BxEps grid "sqrt((v_xc+v_eps)*(v_xc+v_eps) + v_yc*v_yc) * sin((v_xc+v_eps)/v_Rmax)"
+variable gradBx grid "(v_BxEps - v_Bx) / v_eps"
+#variable gradBx grid "mu/mass * (v_BxEps - v_Bx) / v_eps"
 
-fix      1 field/particle gradBx gradBy NULL
-global   field particle 1
+variable By grid "sqrt(v_xc*v_xc + v_yc*v_yc) * sin(v_yc/v_Rmax)"
+variable ByEps grid "sqrt(v_xc*v_xc + (v_yc+v_eps)*(v_yc+v_eps)) * sin((v_yc+v_eps)/v_Rmax)"
+variable gradBy grid "(v_ByEps - v_By) / v_eps"
+#variable gradBy grid "mu/mass * (v_ByEps - v_By) / v_eps"
 
-dump                10 particle all 1000 tmp.dump.* id type f_1[*]
+fix      1 field/grid gradBx gradBy NULL
+global   field grid 1 0
+
+variable b_t equal "readfile(x,y, 2)"
+variable b_x equal "readfile(x,y, 3)"
+variable b_y equal "readfile(x,y, 4)"
+
+#variable T_e equal "readfile(x,y, 5)"
+#variable n_e equal "readfile(x,y, 6)"
+# Calculate ionization
+
+# Sheath electric field
+
+
+#variable BxEps particle "sqrt((x+v_eps)*(x+v_eps) + y*y) * sin((x+v_eps)/v_Rmax)"
+#variable gradBx particle "mu/mass * (v_BxEps - v_Bx) / v_eps"
+
+
+#variable ByEps particle "sqrt(x*x + (y+v_eps)*(y+v_eps)) * sin((y+v_eps)/v_Rmax)"
+#variable gradBy particle "mu/mass * (v_ByEps - v_By) / v_eps"
+
+
+
+dump                10 particle all 100 tmp.dump id type x y z vx vy vz
+
+#b_phi,b_r,b_z,T_e,n_e,v_e,t_i,n_i,v_i
+#variable b_phi equal "readfile(2,-0.5, 2)"
+#variable b_r equal "readfile(2,-0.5, 3)"
+#variable b_z equal "readfile(2,-0.5, 4)"
+
+#variable v_e equal "readfile(2,-0.5, 7)"
+
+#variable T_i equal "readfile(2,-0.5, 8)"
+#variable n_i equal "readfile(2,-0.5, 9)"
+#variable v_i equal "readfile(2,-0.5, 10)"
+
+
+#print "The system temperature is now ${b_phi}"
+#print "The system temperature is now ${b_r}"
+#print "The system temperature is now ${b_z}"
+
+#print "The system temperature is now ${T_e}"
+#print "The system temperature is now ${n_e}"
+#print "The system temperature is now ${v_e}"
+
+#print "The system temperature is now ${T_i}"
+#print "The system temperature is now ${n_i}"
+#print "The system temperature is now ${v_i}"
+
 
 # ---------------------------------------
 
 timestep 	    7.00E-9
 run 		    1000
+
+
