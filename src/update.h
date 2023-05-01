@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -38,6 +38,7 @@ class Update : protected Pointers {
   double nrho;           // number density of background gas
   double vstream[3];     // streaming velocity of background gas
   double temp_thermal;   // thermal temperature of background gas
+  int optmove_flag;      // global optmove option set
 
   int fstyle;            // external field: NOFIELD, CFIELD, PFIELD, GFIELD
   double field[3];       // constant external field
@@ -166,7 +167,7 @@ class Update : protected Pointers {
 
   typedef void (Update::*FnPtr)();
   FnPtr moveptr;             // ptr to move method
-  template < int, int > void move();
+  template < int, int, int > void move();
 
   int perturbflag;
   typedef void (Update::*FnPtr2)(int, int, double, double *, double *);
@@ -197,6 +198,7 @@ class Update : protected Pointers {
   //       unless possibly include modify.h and fix.h in this file
   void field_per_particle(int, int, double, double *, double *);
   void field_per_grid(int, int, double, double *, double *);
+  double readfile(double, double, int);
 };
 
 }

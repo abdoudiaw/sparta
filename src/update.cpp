@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -53,6 +53,8 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
 
+#define MAXLINE 256
+
 // either set ID or PROC/INDEX, set other to -1
 
 //#define MOVE_DEBUG 1              // un-comment to debug one particle
@@ -80,6 +82,7 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   nrho = 1.0;
   vstream[0] = vstream[1] = vstream[2] = 0.0;
   temp_thermal = 273.15;
+  optmove_flag = 0;
   fstyle = NOFIELD;
   fieldID = NULL;
 
@@ -154,17 +157,42 @@ void Update::init()
   if (runflag == 0) return;
   first_update = 1;
 
+  if (optmove_flag) {
+    if (!grid->uniform)
+      error->all(FLERR,"Cannot use optimized move with non-uniform grid");
+    else if (surf->exist)
+      error->all(FLERR,"Cannot use optimized move when surfaces are defined");
+    else {
+      for (int ifix = 0; ifix < modify->nfix; ifix++) {
+        if (strstr(modify->fix[ifix]->style,"adapt") != NULL)
+          error->all(FLERR,"Cannot use optimized move with fix adapt");
+      }
+    }
+  }
+
   // choose the appropriate move method
 
   if (domain->dimension == 3) {
-    if (surf->exist) moveptr = &Update::move<3,1>;
-    else moveptr = &Update::move<3,0>;
+    if (surf->exist)
+      moveptr = &Update::move<3,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<3,0,1>;
+      else moveptr = &Update::move<3,0,0>;
+    }
   } else if (domain->axisymmetric) {
-    if (surf->exist) moveptr = &Update::move<1,1>;
-    else moveptr = &Update::move<1,0>;
+    if (surf->exist)
+      moveptr = &Update::move<1,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<1,0,1>;
+      else moveptr = &Update::move<1,0,0>;
+    }
   } else if (domain->dimension == 2) {
-    if (surf->exist) moveptr = &Update::move<2,1>;
-    else moveptr = &Update::move<2,0>;
+    if (surf->exist)
+      moveptr = &Update::move<2,1,0>;
+    else {
+      if (optmove_flag) moveptr = &Update::move<2,0,1>;
+      else moveptr = &Update::move<2,0,0>;
+    }
   }
 
   // checks on external field options
@@ -322,7 +350,7 @@ void Update::run(int nsteps)
    use multiple iterations of move/comm if necessary
 ------------------------------------------------------------------------- */
 
-template < int DIM, int SURF > void Update::move()
+template < int DIM, int SURF, int OPT > void Update::move()
 {
   bool hitflag;
   int m,icell,icell_original,nmask,outface,bflag,nflag,pflag,itmp;
@@ -333,12 +361,25 @@ template < int DIM, int SURF > void Update::move()
   double dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
   double xnew[3],xhold[3],xc[3],vc[3],minxc[3],minvc[3];
   double *x,*v,*lo,*hi;
+  double Lx,Ly,Lz,dx,dy,dz;
+  double *boxlo, *boxhi;
   Grid::ParentCell *pcell;
   Surf::Tri *tri;
   Surf::Line *line;
   Particle::OnePart iorig;
   Particle::OnePart *particles;
   Particle::OnePart *ipart,*jpart;
+
+  if (OPT) {
+    boxlo = domain->boxlo;
+    boxhi = domain->boxhi;
+    Lx = boxhi[0] - boxlo[0];
+    Ly = boxhi[1] - boxlo[1];
+    Lz = boxhi[2] - boxlo[2];
+    dx = Lx/grid->unx;
+    dy = Ly/grid->uny;
+    dz = Lz/grid->unz;
+  }
 
   // for 2d and axisymmetry only
   // xnew,xc passed to geometry routines which use or set z component
@@ -415,6 +456,13 @@ template < int DIM, int SURF > void Update::move()
 
       x = particles[i].x;
       v = particles[i].v;
+      Particle::Species *species = particle->species;
+      // int isp = i->ispecies;
+      double imass = species[i].mass;
+      double icharge = species[i].charge;
+      // double _mu = species[0].mass;
+
+      printf("v[0] = %f, v[1] = %f, v[2] = %f, mass = %e, charge = %e\n", v[0], v[1], v[2],imass, icharge);
       exclude = -1;
 
       // apply moveperturb() to PKEEP and PINSERT since are computing xnew
@@ -424,6 +472,61 @@ template < int DIM, int SURF > void Update::move()
 
       if (pflag == PKEEP) {
         dtremain = dt;
+  
+
+       // update position and velocity using a magnetic field Bx, By and Bz
+        // this is a leapfrog integration
+        // v= v + dt/2 * (q/m) * (E + v x B)
+
+        double  r = x[0];
+        double  z = x[1];
+        double  Bx =0 ; //readfile(r,z,2);
+        double  By = 0; //readfile(r,z,3);
+        double b_phi = 0; //readfile(r,z,4);
+        // double  b_phi = readfile(r,z,2);
+        // double  Bx = readfile(r,z,3);
+        // double  By =  readfile(r,z,4);
+        // printf("Bx = %f, By = %f, Bz = %f\n",Bx,By,b_phi);
+        /* R,Z,b_phi,b_r,b_z,T_e,n_e,v_e,t_i,n_i,v_i*/
+        // readfile(double r, double z, int field)
+        //  Update velocity using a magnetic field Bx, By and Bz
+
+        double  e = 1.60217662e-19;
+        double  mp = 9.10938356e-31;
+        double qmdt2 = 0.5 * icharge * e/ imass * dt;
+        double tau_x = qmdt2 * Bx;
+        double tau_y = qmdt2 * By;
+        double tau_z = qmdt2 * b_phi;
+        double ex = 100.0;
+        double ey = 0.0;
+        double ez = 0.0;
+
+        double tau_2 = tau_x*tau_x + tau_y*tau_y + tau_z*tau_z;
+
+        // printf("tau_2 = %f\n", tau_2);
+        double s = 2.0 / (1.0 + tau_2);
+        double vminusx = v[0] + qmdt2 * ex;
+        double vminusy = v[1] + qmdt2 * ey;
+        double vminusz = v[2] + qmdt2 * ez;
+
+        double sx = tau_x * s;
+        double sy = tau_y * s;
+        double sz = tau_z * s;
+
+        double vprime_x = vminusx + (vminusy * sz - vminusz * sy);
+        double vprime_y = vminusy + (vminusz * sx - vminusx * sz);
+        double vprime_z = vminusz + (vminusx * sy - vminusy * sx);
+
+        // Get new velocities
+        v[0] = vprime_x + qmdt2 * ex;
+        v[1] = vprime_y + qmdt2 * ey;
+        v[2] = vprime_z + qmdt2 * ez;
+
+        // // print new velocities
+  
+        // printf("v[0] = %f, v[1] = %f, v[2] = %f, mass = %f\n", v[0], v[1], v[2], particles[i].dtremain);
+
+
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
@@ -433,6 +536,7 @@ template < int DIM, int SURF > void Update::move()
         dtremain = particles[i].dtremain;
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
+
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
         if (perturbflag)
           (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
@@ -458,6 +562,52 @@ template < int DIM, int SURF > void Update::move()
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
         if (pflag > PSURF) exclude = pflag - PSURF - 1;
+      }
+
+      // optimized move
+
+      if (OPT) {
+        int optmove = 1;
+
+        if (xnew[0] < boxlo[0] || xnew[0] > boxhi[0])
+          optmove = 0;
+
+        if (xnew[1] < boxlo[1] || xnew[1] > boxhi[1])
+          optmove = 0;
+
+        if (DIM == 3) {
+          if (xnew[2] < boxlo[2] || xnew[2] > boxhi[2])
+            optmove = 0;
+        }
+
+        if (optmove) {
+          const int ip = static_cast<int>((xnew[0] - boxlo[0])/dx);
+          const int jp = static_cast<int>((xnew[1] - boxlo[1])/dy);
+          int kp = 0;
+          if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
+
+          int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
+          int idx = (*(grid->hash))[cellIdx];
+
+          // particle outside ghost grid halo must use standard move
+
+          if (idx != 0) {
+
+            // reset particle cell and coordinates
+
+            int icell = idx - 1;
+            particles[i].icell = icell;
+            particles[i].flag = PKEEP;
+            x[0] = xnew[0];
+            x[1] = xnew[1];
+            x[2] = xnew[2];
+
+            if (cells[icell].proc != me)
+              mlist[nmigrate++] = i;
+
+            continue;
+          }
+        }
       }
 
       particles[i].flag = PKEEP;
@@ -627,15 +777,15 @@ template < int DIM, int SURF > void Update::move()
 
         if (SURF) {
 
-	  // skip surf checks if particle flagged as EXITing this cell
-	  // then unset pflag so not checked again for this particle
+          // skip surf checks if particle flagged as EXITing this cell
+          // then unset pflag so not checked again for this particle
 
           nsurf = cells[icell].nsurf;
-	  if (pflag == PEXIT) {
-	    nsurf = 0;
-	    pflag = 0;
-	  }
-	  nscheck_one += nsurf;
+          if (pflag == PEXIT) {
+            nsurf = 0;
+            pflag = 0;
+          }
+          nscheck_one += nsurf;
 
           if (nsurf) {
 
@@ -678,10 +828,10 @@ template < int DIM, int SURF > void Update::move()
             cflag = 0;
             minparam = 2.0;
             csurfs = cells[icell].csurfs;
-	
+
             for (m = 0; m < nsurf; m++) {
               isurf = csurfs[m];
-	
+
               if (DIM > 1) {
                 if (isurf == exclude) continue;
               }
@@ -774,6 +924,7 @@ template < int DIM, int SURF > void Update::move()
                 minsurf = isurf;
                 minxc[0] = xc[0];
                 minxc[1] = xc[1];
+                printf("minxc %g %g\n",minxc[0],minxc[1]);
                 if (DIM == 3) minxc[2] = xc[2];
                 if (DIM == 1) {
                   minvc[1] = vc[1];
@@ -783,8 +934,8 @@ template < int DIM, int SURF > void Update::move()
 
             } // END of for loop over surfs
 
-	    // tri/line = surf that particle hit first
-	
+            // tri/line = surf that particle hit first
+
             if (cflag) {
               if (DIM == 3) tri = &tris[minsurf];
               if (DIM != 3) line = &lines[minsurf];
@@ -913,12 +1064,12 @@ template < int DIM, int SURF > void Update::move()
         // no cell crossing and no surface collision
         // set final particle position to xnew, then break from advection loop
         // for axisymmetry, must first remap linear xnew and v
-	// for axisymmetry, check if final particle position is within cell
-	//   can be rare epsilon round-off cases where particle ends up outside
-	//     of final cell curved surf when move logic thinks it is inside
-	//   example is when Geom::axi_horizontal_line() says no crossing of cell edge
-	//     but axi_remap() puts particle outside the cell
-	//   in this case, just DISCARD particle and tally it to naxibad
+        // for axisymmetry, check if final particle position is within cell
+        //   can be rare epsilon round-off cases where particle ends up outside
+        //     of final cell curved surf when move logic thinks it is inside
+        //   example is when Geom::axi_horizontal_line() says no crossing of cell edge
+        //     but axi_remap() puts particle outside the cell
+        //   in this case, just DISCARD particle and tally it to naxibad
         // if migrating to another proc,
         //   flag as PDONE so new proc won't move it more on this step
 
@@ -927,13 +1078,13 @@ template < int DIM, int SURF > void Update::move()
           x[0] = xnew[0];
           x[1] = xnew[1];
           if (DIM == 3) x[2] = xnew[2];
-	  if (DIM == 1) {
-	    if (x[1] < lo[1] || x[1] > hi[1]) {
-	      particles[i].flag = PDISCARD;
-	      naxibad++;
-	      break;
-	    }
-	  }
+          if (DIM == 1) {
+            if (x[1] < lo[1] || x[1] > hi[1]) {
+              particles[i].flag = PDISCARD;
+              naxibad++;
+              break;
+            }
+          }
           if (cells[icell].proc != me) particles[i].flag = PDONE;
           break;
         }
@@ -969,8 +1120,8 @@ template < int DIM, int SURF > void Update::move()
         // if parent, use id_find_child to identify child cell
         //   result can be -1 for unknown cell, occurs when:
         //   (a) particle hits face of ghost child cell
-	//   (b) the ghost cell extends beyond ghost halo
-	//   (c) cell on other side of face is a parent
+        //   (b) the ghost cell extends beyond ghost halo
+        //   (c) cell on other side of face is a parent
         //   (d) its child, which the particle is in, is entirely beyond my halo
         // if new cell is child and surfs exist, check if a split cell
 
@@ -988,9 +1139,9 @@ template < int DIM, int SURF > void Update::move()
               icell = split2d(icell,x);
           }
         } else if (nflag == NPARENT) {
-	  pcell = &pcells[neigh[outface]];
+          pcell = &pcells[neigh[outface]];
           icell = grid->id_find_child(pcell->id,cells[icell].level,
-				      pcell->lo,pcell->hi,x);
+                                      pcell->lo,pcell->hi,x);
           if (icell >= 0) {
             if (DIM == 3 && SURF) {
               if (cells[icell].nsplit > 1 && cells[icell].nsurf >= 0)
@@ -1057,9 +1208,9 @@ template < int DIM, int SURF > void Update::move()
                   icell = split2d(icell,x);
               }
             } else if (nflag == NPBPARENT) {
-	      pcell = &pcells[neigh[outface]];
-	      icell = grid->id_find_child(pcell->id,cells[icell].level,
-					  pcell->lo,pcell->hi,x);
+              pcell = &pcells[neigh[outface]];
+              icell = grid->id_find_child(pcell->id,cells[icell].level,
+                                          pcell->lo,pcell->hi,x);
               if (icell >= 0) {
                 if (DIM == 3 && SURF) {
                   if (cells[icell].nsplit > 1 && cells[icell].nsurf >= 0)
@@ -1531,6 +1682,12 @@ void Update::global(int narg, char **arg)
       fnum = input->numeric(FLERR,arg[iarg+1]);
       if (fnum <= 0.0) error->all(FLERR,"Illegal global command");
       iarg += 2;
+    } else if (strcmp(arg[iarg],"optmove") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"yes") == 0) optmove_flag = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) optmove_flag = 0;
+      else error->all(FLERR,"Illegal global command");
+      iarg += 2;
     } else if (strcmp(arg[iarg],"nrho") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       nrho = input->numeric(FLERR,arg[iarg+1]);
@@ -1758,3 +1915,154 @@ int Update::have_mem_limit()
 
   return mem_limit_flag;
 }
+
+double Update::readfile(double r, double z, int field) {
+  // Declare variables
+  int i, m, nwords;
+  char *eof, *word;
+  double fields[99][5];
+  
+  // Open file
+  FILE* fp = fopen("magnetic_field_data.txt", "r");
+  if (fp == NULL) {
+    error->one(FLERR, "Unable to open file");
+    return 0.0; // return a default value
+  }
+
+  char line[MAXLINE];
+  fgets(line, MAXLINE, fp); // ignore first line
+
+  // Read data from file
+  for (i = 0; i < 99; i++) {
+    eof = fgets(line, MAXLINE, fp);
+    if (eof == NULL) {
+      printf("Error: Unexpected end of file at line %d\n", i + 1);
+      error->one(FLERR, "Unexpected end of file");
+      return 0.0; // return a default value
+    }
+    nwords = input->count_words(line);
+    if (nwords != 5) {
+      error->one(FLERR, "Bad line in file");
+      return 0.0; // return a default value
+    }
+    // Tokenize the line and convert words to fields
+    for (m = 0; m < 5; m++) {
+      if (m == 0) word = strtok(line, " \t\n\r\f");
+      else word = strtok(NULL, " \t\n\r\f");
+      if (word == NULL) {
+        error->one(FLERR, "Bad line in file");
+        return 0.0; // return a default value
+      }
+      fields[i][m] = atof(word);
+    }
+  }
+  fclose(fp); // Close the file
+
+  // Find the minimum distance and corresponding index
+  double minDist = 1e10;
+  int minIndex = 0;
+  for (i = 0; i < 99; i++) {
+    double R = fields[i][0];
+    double Z = fields[i][1];
+
+    double dist = sqrt(pow(R - r, 2) + pow(Z - z, 2));
+    if (dist < minDist) {
+      minDist = dist;
+      minIndex = i;
+    }
+  }
+
+  double qoi_val = fields[minIndex][field];
+  return qoi_val;
+}
+
+
+// double Update::readfile(double r, double z, int field)
+// {
+//   int i, m, nwords;
+//   char *eof, *word;
+//   double **fields;
+//   double *R, *Z, *_qoi;
+//   /* R,Z,b_phi,b_r,b_z,T_e,n_e,v_e,t_i,n_i,v_i*/
+
+//    //declare file name
+//   // char file[128];
+//   // open file
+//   FILE* fp = fopen("data.txt", "r");
+//   if (fp == NULL) {
+//     error->one(FLERR, "Unable to open file");
+//     return 0.0; // return a default value
+//   }
+
+//   char line[MAXLINE];
+//   fgets(line, MAXLINE, fp); // ignore first line
+//   // initialize n and nfield to appropriate values
+//   int n = 29648;
+//   int nfield = 11;
+//   // allocate memory for fields
+//   fields = new double*[n];
+//   for (i = 0; i < n; i++) {
+//     fields[i] = new double[nfield];
+//   }
+
+//   for (i = 0; i < n; i++) {
+//     eof = fgets(line, MAXLINE, fp);
+//     if (eof == NULL) {
+//     printf("Error: Unexpected end of file at line %d\n", i+1);
+//       error->one(FLERR, "Unexpected end of file");
+//       return 0.0; // return a default value
+//     }
+//     nwords = input->count_words(line);
+//     if (nwords != nfield) {
+//       error->one(FLERR, "Bad line in file");
+//       return 0.0; // return a default value
+//     }
+//     // tokenize the line and convert words to fields
+//     for (m = 0; m < nfield; m++) {
+//       if (m == 0) word = strtok(line, " \t\n\r\f");
+//       else word = strtok(NULL, " \t\n\r\f");
+//       if (word == NULL) {
+//         error->one(FLERR, "Bad line in file");
+//         return 0.0; // return a default value
+//       }
+//       fields[i][m] = atof(word);
+//     }
+//   }
+//   double minDist = 1e10;
+//   int minIndex = 0;
+//   for (i = 0; i < n; i++) {
+//     R = new double;
+//     Z = new double;
+//     _qoi = new double;
+    
+    
+//     *R = fields[i][0];
+//     *Z = fields[i][1];
+//     *_qoi = fields[i][field];
+
+//     // // print R and Z AND qoi
+//     // printf("R = %f, Z = %f, qoi = %f\n", *R, *Z, *_qoi);
+
+//     double dist = sqrt(pow(*R - r, 2) + pow(*Z - z, 2));
+//     if (dist < minDist) {
+//       minDist = dist;
+//       minIndex = i;
+//     }
+
+//   delete R;
+//   delete Z;
+//   delete _qoi;
+//   }
+
+//   double qoi_val = fields[minIndex][field];
+//   // print value of qoi
+  
+//   // deallocate memory for fields
+//   for (i = 0; i < n; i++) {
+//   delete [] fields[i];
+//   }
+//   delete [] fields;
+
+//   fclose(fp); // close the file
+//   return qoi_val;
+// }

@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -83,7 +83,7 @@ struct s_UPDATE_REDUCE {
 };
 typedef struct s_UPDATE_REDUCE UPDATE_REDUCE;
 
-template<int DIM, int SURF, int ATOMIC_REDUCTION>
+template<int DIM, int SURF, int OPT, int ATOMIC_REDUCTION>
 struct TagUpdateMove{};
 
 class UpdateKokkos : public Update {
@@ -102,18 +102,25 @@ class UpdateKokkos : public Update {
   void setup();
   void run(int);
 
-  template<int DIM, int SURF, int ATOMIC_REDUCTION>
+  template<int DIM, int SURF, int OPT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const int&) const;
+  void operator()(TagUpdateMove<DIM,SURF,OPT,ATOMIC_REDUCTION>, const int&) const;
 
-  template<int DIM, int SURF, int ATOMIC_REDUCTION>
+  template<int DIM, int SURF, int OPT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagUpdateMove<DIM,SURF,ATOMIC_REDUCTION>, const int&, UPDATE_REDUCE&) const;
+  void operator()(TagUpdateMove<DIM,SURF,OPT,ATOMIC_REDUCTION>, const int&, UPDATE_REDUCE&) const;
 
  private:
 
   double dt;
   int field_active[3];
+
+  // data for optimized particle moves
+
+  double dx,dy,dz,Lx,Ly,Lz;
+  double xlo,ylo,zlo,xhi,yhi,zhi;
+  int ncx,ncy,ncz;
+  GridKokkos::hash_type hash_kk;
 
   t_cell_1d d_cells;
   t_sinfo_1d d_sinfo;
@@ -212,7 +219,7 @@ class UpdateKokkos : public Update {
 
   typedef void (UpdateKokkos::*FnPtr)();
   FnPtr moveptr;             // ptr to move method
-  template < int, int > void move();
+  template < int, int, int > void move();
 
   //typedef void (UpdateKokkos::*FnPtr2)(int, int, double, double *, double *) const;
   //FnPtr2 moveperturb;        // ptr to moveperturb method
@@ -257,10 +264,10 @@ class UpdateKokkos : public Update {
 
   KOKKOS_INLINE_FUNCTION
   void field_per_particle(int i, int icell, double dt, double *x, double *v) const
-  { 
+  {
     const double dtsq = 0.5*dt*dt;
     auto &d_array = d_fieldfix_array_particle;
-    
+
     int icol = 0;
     if (field_active[0]) {
       x[0] += dtsq*d_array(i,icol);

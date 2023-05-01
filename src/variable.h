@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -17,8 +17,6 @@
 
 #include "stdio.h"
 #include "pointers.h"
-#include <string>
-#include <vector>
 
 namespace SPARTA_NS {
 
@@ -47,11 +45,6 @@ class Variable : protected Pointers {
 
   int int_between_brackets(char *&, int);
   double evaluate_boolean(char *);
-//    double interpolateBPhi(const std::string& , double , double );
-//    struct Data {
-//               double R, Z, b_phi, b_r, b_z, T_e, n_e, v_e, t_i, n_i, v_i;
-//           };
-//    Data interpolateData(const std::string& filename, double r, double z);
 
  private:
   int me;
@@ -93,13 +86,6 @@ class Variable : protected Pointers {
     Tree *left,*middle,*right;    // ptrs further down tree
   };
 
-  // void read_file(char *);
-  // void read_file(double , double , char *);
-  // double read_file(double r, double z, char *file);  // change return type to double
-  double readfile(double r, double z, int field);  // change return type to double
-
-  // void processPlasmaData(int , double **);
-  // void read_file(int , int , double **);
   void remove(int);
   void grow();
   void copy(int, char **, char **);
@@ -110,7 +96,7 @@ class Variable : protected Pointers {
   int find_matching_paren(char *, int, char *&);
   int math_function(char *, char *, Tree **, Tree **, int &, double *, int &);
   int special_function(char *, char *, Tree **, Tree **,
-		       int &, double *, int &);
+                       int &, double *, int &);
   int is_particle_vector(char *);
   void particle_vector(char *, Tree **, Tree **, int &);
   int is_grid_vector(char *);
