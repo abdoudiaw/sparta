@@ -57,8 +57,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
   int n = reactions[isp][jsp].n;
 
-  //  printf(" loop over possible reactions for these 2 species\n");
-//  printf( " we have %d reactions\n",n);
+  printf(" reactiions number n = %d\n",n);
+
 
   if (n == 0) return 0;
   int *list = reactions[isp][jsp].list;
@@ -82,10 +82,12 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
 
     e_excess = ecc - r->coeff[1];
+    printf(" coeff[1] = %g\n",r->coeff[1]);
 
     if (e_excess <= 0.0) 
     { 
-          printf("e_excess = %f\n",e_excess);
+          printf("ignoring reaction because e_excess = %f\n",e_excess);
+      
       continue;
     }
 
@@ -127,23 +129,6 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
       error->one(FLERR,"Unknown outcome in reaction");
       break;
     }
-
-    // test against random number to see if this reaction occurs
-    // if it does, reset species of I,J and optional K to product species
-    // J particle is destroyed in recombination reaction, set species = -1
-    // K particle can be created in a dissociation or ionization reaction,
-    //   set its kspecies, parent will create it
-    // important NOTE:
-    //   does not matter what order I,J reactants are in compared
-    //     to order the reactants are listed in the reaction file
-    //   for two reasons:
-    //   a) list of N possible reactions above includes all reactions
-    //      that I,J species are in, regardless of order
-    //   b) properties of pre-reaction state are stored in precoln:
-    //      computed by setup_collision()
-    //      used by perform_collision() after reaction has taken place
-    //      precoln only stores combined properties of I,J
-    //      nothing that is I-specific or J-specific
 
     if (react_prob > random_prob) {
       tally_reactions[list[i]]++;

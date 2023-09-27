@@ -15,7 +15,7 @@
 #include "math.h"
 #include "string.h"
 #include "stdlib.h"
-#include "react_bird.h"
+#include "react_coulomb.h"
 #include "input.h"
 #include "collide.h"
 #include "update.h"
@@ -23,7 +23,6 @@
 #include "comm.h"
 #include "modify.h"
 #include "fix.h"
-#include "fix_ambipolar.h"
 #include "random_knuth.h"
 #include "math_const.h"
 #include "memory.h"
@@ -32,9 +31,8 @@
 using namespace SPARTA_NS;
 using namespace MathConst;
 
-enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};  // other react files
-enum{ARRHENIUS,QUANTUM,COULOMB};                               // other react files
-
+enum{IONIZATION,RECOMBINATION};  // other react files
+enum{COULOMB};
 #define MAXREACTANT 2
 #define MAXPRODUCT 3
 #define MAXCOEFF 7               // 5 in file, extra for pre-computation
@@ -44,7 +42,7 @@ enum{ARRHENIUS,QUANTUM,COULOMB};                               // other react fi
 
 /* ---------------------------------------------------------------------- */
 
-ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
+ReactCoulomb::ReactCoulomb(SPARTA *sparta, int narg, char **arg) :
   React(sparta, narg, arg)
 {
   if (narg != 2) error->all(FLERR,"Illegal react tce or qk command");
@@ -63,9 +61,9 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   sp2recomb_ij = NULL;
 }
 
-/* ---------------------------------------------------------------------- */
+// /* ---------------------------------------------------------------------- */
 
-ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
+ReactCoulomb::ReactCoulomb(SPARTA *sparta) : React(sparta)
 {
   rlist = NULL;
   reactions = NULL;
@@ -73,9 +71,9 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   sp2recomb_ij = NULL;
 }
 
-/* ---------------------------------------------------------------------- */
+// /* ---------------------------------------------------------------------- */
 
-ReactBird::~ReactBird()
+ReactCoulomb::~ReactCoulomb()
 {
   if (copy) return;
 
@@ -103,9 +101,9 @@ ReactBird::~ReactBird()
   memory->destroy(sp2recomb_ij);
 }
 
-/* ---------------------------------------------------------------------- */
+// /* ---------------------------------------------------------------------- */
 
-void ReactBird::init()
+void ReactCoulomb::init()
 {
   tally_flag = 0;
   for (int i = 0; i < nlist; i++) tally_reactions[i] = 0;
@@ -113,7 +111,6 @@ void ReactBird::init()
   // convert species IDs to species indices
   // flag reactions as active/inactive depending on whether all species exist
   // mark recombination reactions inactive if recombflag_user = 0
-    printf("Initializing bird!\n");
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *r = &rlist[m];
@@ -147,7 +144,6 @@ void ReactBird::init()
             continue;
           }
         }
-
         r->active = 0;
         break;
       }
@@ -160,8 +156,7 @@ void ReactBird::init()
 
   memory->destroy(reactions);
   int nspecies = particle->nspecies;
-  reactions = memory->create(reactions,nspecies,nspecies,
-                             "react/bird:reactions");
+  reactions = memory->create(reactions,nspecies,nspecies, "react/bird:reactions");
 
   for (int i = 0; i < nspecies; i++)
     for (int j = 0; j < nspecies; j++)
@@ -225,74 +220,7 @@ void ReactBird::init()
 
     int isp = r->reactants[0];
     int jsp = r->reactants[1];
-
-    // symmetry parameter
-
-    double epsilon = 1.0;
-    if (isp == jsp) epsilon = 2.0;
-
-    double diam = collide->extract(isp,jsp,"diam");
-    double omega = collide->extract(isp,jsp,"omega");
-    double tref = collide->extract(isp,jsp,"tref");
-
-    // double pre_ave_vibdof = (species[isp].vibdof + species[jsp].vibdof)/2.0;
-    double mr = species[isp].mass * species[jsp].mass /
-        (species[isp].mass + species[jsp].mass);
-    double sigma = MY_PI*diam*diam;
-
-    // average DOFs participating in the reaction
-
-    double z = r->coeff[0];
-
-    // add additional coeff for effective DOF
-    // added MAX() limit, 24Aug18
-
-    double c1 = MY_PIS*epsilon*r->coeff[2]/(2.0*sigma) *
-      sqrt(mr/(2.0*update->boltz*tref)) *
-      pow(tref,1.0-omega)/pow(update->boltz,r->coeff[3]-1.0+omega) *
-      tgamma(z+2.5-omega) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5));
-    double c2 = r->coeff[3] - 1.0 + omega;
-
-    r->coeff[2] = c1;
-    r->coeff[3] = c2;
-    r->coeff[5] = z + 1.5 - omega;
-
-    // add additional coeff for post-collision effective omega
-    // mspec = post-collision species of the particle
-    // aspec = post-collision species of the atom
-
-    double momega,aomega;
-
-    if (r->nproduct > 1) {
-      int mspec = r->products[0];
-      int aspec = r->products[1];
-
-      if (species[mspec].rotdof < 2.0) {
-        mspec = r->products[1];
-        aspec = r->products[0];
-      }
-
-      int ncount = 0;
-      if (mspec >= 0) {
-        momega = collide->extract(mspec,mspec,"omega");
-        ncount++;
-      } else momega = 0.0;
-      if (aspec >= 0) {
-        aomega = collide->extract(aspec,aspec,"omega");
-        ncount++;
-      } else aomega = 0.0;
-
-      r->coeff[6] = (momega+aomega) / ncount;
-
-    } else {
-      int mspec = r->products[0];
-      momega = collide->extract(mspec,mspec,"omega");
-      r->coeff[6] = momega;
-    }
   }
-
-  // set recombflag = 0/1 if any recombination reactions are defined & active
-  // check for user disabling them is at top of this method
 
   recombflag = 0;
   for (int m = 0; m < nlist; m++) {
@@ -407,138 +335,20 @@ void ReactBird::init()
     }
 }
 
-/* ----------------------------------------------------------------------
-   return 1 if any recombination reactions are defined for species pair ISP,JSP
-   else return 0
-   called from Collide::init(), after React::init() has been performed
-------------------------------------------------------------------------- */
+// /* ----------------------------------------------------------------------
+//    return 1 if any recombination reactions are defined for species pair ISP,JSP
+//    else return 0
+//    called from Collide::init(), after React::init() has been performed
+// ------------------------------------------------------------------------- */
 
-int ReactBird::recomb_exist(int isp, int jsp)
+int ReactCoulomb::recomb_exist(int isp, int jsp)
 {
   if (reactions[isp][jsp].sp2recomb) return 1;
   return 0;
 }
 
-/* ----------------------------------------------------------------------
-   check active reactions that include ambi ion or electron especies
-   their format must be correct to work with ambi_reset()
-   called after init() from collide::init()
-------------------------------------------------------------------------- */
 
-void ReactBird::ambi_check()
-{
-  int flag;
-  OneReaction *r;
-
-  // fix ambipolar must exist since collide caller extracted ambi vector/array
-
-  int ifix;
-  for (ifix = 0; ifix < modify->nfix; ifix++)
-    if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
-  FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
-  int especies = afix->especies;
-  int *ions = afix->ions;
-
-  // loop over active reactions
-
-  for (int i = 0; i < nlist; i++) {
-    r = &rlist[i];
-    if (!r->active) continue;
-
-    // skip reaction if no ambipolar ions or electrons as reactant or product
-    // r->products[j] can be < 0 for atom or mol
-
-    flag = 0;
-    for (int j = 0; j < r->nreactant; j++)
-      if (r->reactants[j] == especies || ions[r->reactants[j]]) flag = 1;
-    for (int j = 0; j < r->nproduct; j++) {
-      if (r->products[j] < 0) continue;
-      if (r->products[j] == especies || ions[r->products[j]]) flag = 1;
-    }
-    if (!flag) continue;
-
-    // dissociation must match one of these orders
-    // D: AB + e -> A + e + B
-    // D: AB+ + e -> A+ + e + B
-
-    flag = 1;
-
-    if (r->type == DISSOCIATION) {
-      if (r->nreactant == 2 && r->nproduct == 3) {
-        if (ions[r->reactants[0]] == 0 && r->reactants[1] == especies &&
-            ions[r->products[0]] == 0 && r->products[1] == especies &&
-            ions[r->products[2]] == 0) flag = 0;
-        else if (ions[r->reactants[0]] == 1 && r->reactants[1] == especies &&
-                 ions[r->products[0]] == 1 && r->products[1] == especies &&
-                 ions[r->products[2]] == 0) flag = 0;
-      }
-    }
-
-    // ionization with 3 products must match this
-    // I: A + e -> A+ + e + e
-
-    else if (r->type == IONIZATION && r->nproduct == 3) {
-      if (r->nreactant == 2 && r->nproduct == 3) {
-        if (ions[r->reactants[0]] == 0 && r->reactants[1] == especies &&
-            ions[r->products[0]] == 1 && r->products[1] == especies &&
-            r->products[2] == especies) flag = 0;
-      }
-    }
-
-    // ionization with 2 products must match this
-    // I: A + B -> AB+ + e
-
-    else if (r->type == IONIZATION && r->nproduct == 2) {
-      if (r->nreactant == 2 && r->nproduct == 2) {
-        if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 0 &&
-            ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
-      }
-    }
-
-    // exchange must match one of these
-    // E: AB+ + e -> A + B
-    // E: AB+ + C -> A + BC+
-    // E: C + AB+ -> A + BC+
-
-    else if (r->type == EXCHANGE) {
-      if (r->nreactant == 2 && r->nproduct == 2) {
-        if (ions[r->reactants[0]] == 1 && r->reactants[1] == especies &&
-            ions[r->products[0]] == 0 && ions[r->products[1]] == 0) flag = 0;
-        else if (ions[r->reactants[0]] == 1 && ions[r->reactants[1]] == 0 &&
-            ions[r->products[0]] == 0 && ions[r->products[1]] == 1) flag = 0;
-        else if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 1 &&
-            ions[r->products[0]] == 0 && ions[r->products[1]] == 1) flag = 0;
-      }
-    }
-
-    // recombination must match one of these
-    // R: A+ + e -> A
-    // R: A + B+ -> AB+
-    // R: A+ + B -> AB+
-
-    else if (r->type == RECOMBINATION) {
-      if (r->nreactant == 2 && r->nproduct == 1) {
-        if (ions[r->reactants[0]] == 1 && r->reactants[1] == especies &&
-            ions[r->products[0]] == 0) flag = 0;
-        else if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 1 &&
-            ions[r->products[0]] == 1) flag = 0;
-        else if (ions[r->reactants[0]] == 1 && ions[r->reactants[1]] == 0 &&
-            ions[r->products[0]] == 1) flag = 0;
-      }
-    }
-
-    // flag = 1 means unrecognized reaction
-
-    if (flag) {
-      print_reaction_ambipolar(r);
-      error->all(FLERR,"Invalid ambipolar reaction");
-    }
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
-void ReactBird::readfile(char *fname)
+void ReactCoulomb::readfile(char *fname)
 {
   int n,n1,n2,eof;
   char line1[MAXLINE],line2[MAXLINE];
@@ -654,9 +464,7 @@ void ReactBird::readfile(char *fname)
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction type in file");
     }
-    if (word[0] == 'D' || word[0] == 'd') r->type = DISSOCIATION;
-    else if (word[0] == 'E' || word[0] == 'e') r->type = EXCHANGE;
-    else if (word[0] == 'I' || word[0] == 'i') r->type = IONIZATION;
+    if (word[0] == 'I' || word[0] == 'i') r->type = IONIZATION;
     else if (word[0] == 'R' || word[0] == 'r') r->type = RECOMBINATION;
     else {
       print_reaction(copy1,copy2);
@@ -665,23 +473,13 @@ void ReactBird::readfile(char *fname)
 
     // check that reactant/product counts are consistent with type
 
-    if (r->type == DISSOCIATION) {
-      if (r->nreactant != 2 || r->nproduct != 3) {
-        print_reaction(copy1,copy2);
-        error->all(FLERR,"Invalid dissociation reaction");
-      }
-    } else if (r->type == EXCHANGE) {
-      if (r->nreactant != 2 || r->nproduct != 2) {
-        print_reaction(copy1,copy2);
-        error->all(FLERR,"Invalid exchange reaction");
-      }
-    } else if (r->type == IONIZATION) {
-      if (r->nreactant != 2 || (r->nproduct != 2 && r->nproduct != 3)) {
+    if (r->type == IONIZATION) {
+      if (r->nreactant != 1 || (r->nproduct != 1)) {
         print_reaction(copy1,copy2);
         error->all(FLERR,"Invalid ionization reaction");
       }
     } else if (r->type == RECOMBINATION) {
-      if (r->nreactant != 2 || (r->nproduct != 1 && r->nproduct != 2)) {
+      if (r->nreactant != 1 || (r->nproduct != 1)) {
         print_reaction(copy1,copy2);
         error->all(FLERR,"Invalid recombination reaction");
       }
@@ -692,15 +490,13 @@ void ReactBird::readfile(char *fname)
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction style in file");
     }
-    if (word[0] == 'A' || word[0] == 'a') r->style = ARRHENIUS;
-    else if (word[0] == 'Q' || word[0] == 'q') r->style = QUANTUM;
-    else if (word[0] == 'C' || word[0] == 'c') r->style = COULOMB;
+    if (word[0] == 'C' || word[0] == 'c') r->style = COULOMB;
     else {
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction style in file");
     }
 
-    if (r->style == ARRHENIUS || r->style == QUANTUM || r->style == COULOMB) r->ncoeff = 5;
+    if (r->style == COULOMB ) r->ncoeff = 5;
 
     for (int i = 0; i < r->ncoeff; i++) {
       word = strtok(NULL," \t\n\r");
@@ -723,13 +519,13 @@ void ReactBird::readfile(char *fname)
   if (comm->me == 0) fclose(fp);
 }
 
-/* ----------------------------------------------------------------------
-   read one reaction from file
-   reaction = 2 lines
-   return 1 if end-of-file, else return 0
-------------------------------------------------------------------------- */
+// /* ----------------------------------------------------------------------
+//    read one reaction from file
+//    reaction = 2 lines
+//    return 1 if end-of-file, else return 0
+// ------------------------------------------------------------------------- */
 
-int ReactBird::readone(char *line1, char *line2, int &n1, int &n2)
+int ReactCoulomb::readone(char *line1, char *line2, int &n1, int &n2)
 {
   char *eof;
   while ((eof = fgets(line1,MAXLINE,fp))) {
@@ -745,12 +541,12 @@ int ReactBird::readone(char *line1, char *line2, int &n1, int &n2)
   return 1;
 }
 
-/* ----------------------------------------------------------------------
-   check for duplicates in list of reactions read from file
-   error if any exist
-------------------------------------------------------------------------- */
+// /* ----------------------------------------------------------------------
+//    check for duplicates in list of reactions read from file
+//    error if any exist
+// ------------------------------------------------------------------------- */
 
-void ReactBird::check_duplicate()
+void ReactCoulomb::check_duplicate()
 {
   OneReaction *r,*s;
 
@@ -805,7 +601,7 @@ void ReactBird::check_duplicate()
    only proc 0 performs output
 ------------------------------------------------------------------------- */
 
-void ReactBird::print_reaction(char *line1, char *line2)
+void ReactCoulomb::print_reaction(char *line1, char *line2)
 {
   if (comm->me) return;
   printf("Bad reaction format:\n");
@@ -817,75 +613,38 @@ void ReactBird::print_reaction(char *line1, char *line2)
    only proc 0 performs output
 ------------------------------------------------------------------------- */
 
-void ReactBird::print_reaction(OneReaction *r)
+void ReactCoulomb::print_reaction(OneReaction *r)
 {
   if (comm->me) return;
   printf("Bad reaction:\n");
 
   char type;
-  if (r->type == DISSOCIATION) type = 'D';
-  else if (r->type == EXCHANGE) type = 'E';
-  else if (r->type == IONIZATION) type = 'I';
+  if (r->type == IONIZATION) type = 'I';
   else if (r->type == RECOMBINATION) type = 'R';
 
   char style;
-  if (r->style == ARRHENIUS) style = 'A';
-  else if (r->style == QUANTUM) style = 'Q';
-  else if (r->style == COULOMB) style = 'C';
-
+  if (r->style == COULOMB) style = 'C';
   if (r->nproduct == 1)
     printf("  %c %c: %s + %s --> %s\n",type,style,
            r->id_reactants[0],r->id_reactants[1],
            r->id_products[0]);
-  else if (r->nproduct == 2)
-    printf("  %c %c: %s + %s --> %s %s\n",type,style,
-           r->id_reactants[0],r->id_reactants[1],
-           r->id_products[0],r->id_products[1]);
-  else if (r->nproduct == 3)
-    printf("  %c %c: %s + %s --> %s %s %s\n",type,style,
-           r->id_reactants[0],r->id_reactants[1],
-           r->id_products[0],r->id_products[1],r->id_products[2]);
 };
 
-/* ----------------------------------------------------------------------
-   print reaction as stored in rlist
-   only proc 0 performs output
-------------------------------------------------------------------------- */
 
-void ReactBird::print_reaction_ambipolar(OneReaction *r)
-{
-  if (comm->me) return;
-  printf("check ambipolar reaction:\n");
-  printf("Bad ambipolar reaction format:\n");
-  printf("  type %d style %d\n",r->type,r->style);
-  printf("  nreactant %d:",r->nreactant);
-  for (int i = 0; i < r->nreactant; i++)
-    printf(" %s",r->id_reactants[i]);
-  printf("\n");
-  printf("  nproduct %d:",r->nproduct);
-  for (int i = 0; i < r->nproduct; i++)
-    printf(" %s",r->id_products[i]);
-  printf("\n");
-  printf("  ncoeff %d:",r->ncoeff);
-  for (int i = 0; i < r->ncoeff; i++)
-    printf(" %g",r->coeff[i]);
-  printf("\n");
-};
+// /* ----------------------------------------------------------------------
+//    return reaction ID = chemical formula
+// ------------------------------------------------------------------------- */
 
-/* ----------------------------------------------------------------------
-   return reaction ID = chemical formula
-------------------------------------------------------------------------- */
-
-char *ReactBird::reactionID(int m)
+char *ReactCoulomb::reactionID(int m)
 {
   return rlist[m].id;
 };
 
-/* ----------------------------------------------------------------------
-   return tally associated with a reaction
-------------------------------------------------------------------------- */
+// /* ----------------------------------------------------------------------
+//    return tally associated with a reaction
+// ------------------------------------------------------------------------- */
 
-double ReactBird::extract_tally(int m)
+double ReactCoulomb::extract_tally(int m)
 {
   if (!tally_flag) {
     tally_flag = 1;

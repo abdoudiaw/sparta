@@ -41,10 +41,12 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
-
+#include "random_knuth.h"
 #include <string>  
-#include </Users/42d/opt/anaconda3/include/H5Cpp.h>
 #include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
+#include <random>
+#include <iostream>
+
 
 using namespace SPARTA_NS;
 
@@ -466,13 +468,52 @@ template < int DIM, int SURF, int OPT > void Update::move()
       double electron_charge = 1.60217662e-19;
       ipart = &particles[i];
       Particle::Species *species = particle->species;
+      double proton_mass = 1.6726219e-27;
       int isp = ipart->ispecies;
       double mass = species[isp].mass;
       double charge = species[isp].charge * electron_charge;
       // get magnetic field at particle position
       double B[3];
-      // get_magnetic_field(i, x, B);
-    
+   
+  // // Get ionization and recombinations rates
+    // double ionization_rates =  get_ionization_rates(x, mass/proton_mass, species[isp].charge);
+    // double recombination_rates = get_recombination_rates(x, mass/proton_mass, species[isp].charge);
+
+  
+    // double react_prob_ioniziation = 0.0;
+    // double react_prob_recombination = 0.0;
+    // double current_prob=0;
+    // std::random_device rd;  // Used to seed the engine
+    // std::mt19937 rng(rd()); // Mersenne Twister pseudo-random generator
+    // std::uniform_real_distribution<double> distribution(0.0, 1.0);
+
+    // // Generate a random number
+    // double random_prob_ion = distribution(rng);
+    // double random_prob_rec = distribution(rng);
+    // double small_threshold = 1e-3; // You can adjust this value
+    // double dt_times_ionization = dt * ionization_rates;
+    // double dt_times_recombination = dt * recombination_rates;
+
+    // react_prob_ioniziation = 1.0 - exp(-dt_times_ionization);
+    // react_prob_recombination = 1.0  - exp(-dt_times_recombination);
+    // // printf("react_prob_ioniziation = %g\n", react_prob_ioniziation);
+    // // printf("react_prob_recombination = %g\n", react_prob_recombination);
+    // // printf("random_prob_ion  random_prob_rec = %g %g\n", random_prob_ion, random_prob_rec);
+    // // ionized  if (random_prob < react_prob_ioniziation) {
+    // if (random_prob_ion < react_prob_ioniziation){
+    //     printf("Ionized\n");
+    //     species[isp].charge += 1;
+    //     // push data back to the particle
+    //     // isp
+    // }
+    // printf("species[isp].charge = %d\n", species[isp].charge);
+    // // recombined
+    // if (random_prob_rec <  react_prob_recombination) {
+
+    //     printf("Recombined\n");
+    //     species[isp].charge -= 1;
+    //     // push data back to the particle
+    // }
 
       exclude = -1;
 
@@ -2007,3 +2048,191 @@ void Update::pusher_boris(double *x, double *v, double *xnew, double charge, dou
         xnew[i]  = x[i] + v[i] * dt;
     }
 }
+
+
+/* ----------------------------------------------------------------------
+// read density and temperature profiles:
+------------------------------------------------------------------------- */
+
+std::vector<DataPointPlasma> Update::loadDataPlasma(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<DataPointPlasma> data;
+    std::string line;
+    // Skip the header
+    std::getline(file, line);
+    DataPointPlasma point;
+    while (file >> point.r >> point.z >> point.ne >> point.te) {
+        data.push_back(point);
+    }
+    return data;
+}
+
+std::vector<DataPointRate> Update::loadDataRate(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<DataPointRate> data;
+    std::string line;
+    // Skip the header
+    std::getline(file, line);
+    DataPointRate point;
+    while (file >> point.te >> point.ne >> point.rate) {
+        data.push_back(point);
+    }
+    return data;
+}
+
+Eigen::VectorXd interpolatePlasma(const std::vector<DataPointPlasma>& data, double x, double z) {
+    Eigen::VectorXd result(2);
+    result << 0, 0;
+
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (x >= data[i-1].r && x <= data[i].r) {
+            for (size_t j = 1; j < data.size(); ++j) {
+                if (z >= data[j-1].z && z <= data[j].z) {
+                    // Bilinear interpolation
+                    
+                    double alpha = (x - data[i-1].r) / (data[i].r - data[i-1].r);
+                    double beta = (z - data[j-1].z) / (data[j].z - data[j-1].z);
+
+                    double  ne1 = data[i-1].ne + alpha * (data[i].ne - data[i-1].ne);
+                    double  ne2 = data[j-1].ne + beta * (data[j].ne - data[j-1].ne);
+                    
+                    double te1 = data[i-1].te + alpha * (data[i].te - data[i-1].te);
+                    double te2 = data[j-1].te + beta * (data[j].te - data[j-1].te);
+                    
+                    result(0) =  ne1 + beta * ( ne2 -  ne1);
+                    result(1) = te1 + beta * (te2 - te1);
+                    
+                    return result;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+const std::vector<DataPointPlasma>& Update::getCachedPlasmaData() {
+    if (cachedDataPlasma.empty()) {
+        cachedDataPlasma = loadDataPlasma("plasma.txt");
+    }
+    return cachedDataPlasma;
+}
+    std::vector<double> Update::get_density_temperature(double *x) {
+    std::vector<DataPointPlasma> data = getCachedPlasmaData();
+    auto interpolatedValues = interpolatePlasma(data, x[0], x[1]);
+
+    std::vector<double> plasma = { interpolatedValues(0), interpolatedValues(1), 0 };
+    return plasma;
+}
+
+
+const std::vector<DataPointRate>& Update::getCachedIonizationRates(int mass, int charge) {
+    std::string material;
+    // printf("looking for material with mass mass: %g\n", mass);
+    if (mass == 184) {
+        material = "tungsten";
+    } else if (mass == 16) {
+        material = "oxygen";
+    } else {
+        throw std::runtime_error("Material does not exist in the DB!");
+    }
+
+    std::string filename = "rates/" + material + "_ionization." + std::to_string(charge) + ".txt";
+
+    // If the cache is empty or if the filename has changed (i.e., new mass or charge), reload data.
+    if (cachedDataIonizationRates.empty() || filename != cachedIonFilename) {
+        // std::cout << "Reading file: " << filename << std::endl;
+        cachedDataIonizationRates = loadDataRate(filename);
+        cachedIonFilename = filename;  // Store the current filename to check against future calls.
+    }
+    return cachedDataIonizationRates;
+}
+
+const std::vector<DataPointRate>& Update::getCachedRecombRates(int mass, int charge) {
+    std::string material;
+
+    if (mass == 184) {
+        material = "tungsten";
+    } else if (mass == 16) {
+        material = "oxygen";
+    } else {
+        throw std::runtime_error("Material does not exist in the DB!");
+    }
+
+    std::string filename = "rates/" + material + "_recombination." + std::to_string(charge) + ".txt";
+
+    // If the cache is empty or if the filename has changed (i.e., new mass or charge), reload data.
+    if (cachedDataRecombRates.empty() || filename != cachedRecomFilename) {
+        // std::cout << "Reading file: " << filename << std::endl;
+        cachedDataRecombRates = loadDataRate(filename);
+        cachedRecomFilename = filename;  // Store the current filename to check against future calls.
+    }
+
+    return cachedDataRecombRates;
+}
+
+
+double Update::get_ionization_rates(double *x, int mass, int charge) {
+    // Get temperature and density:
+    std::vector<double> plasmaData = get_density_temperature(x);
+    std::vector<DataPointRate> data = getCachedIonizationRates(mass, charge);
+
+    double neLog = log10(plasmaData[0]);
+    double teLog = log10(plasmaData[1]);
+    // printf("neLog: %g, teLog: %g\n", plasmaData[0], plasmaData[1]);
+
+    double rateResult = 0.0;
+
+
+
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (neLog >= data[i-1].ne && neLog <= data[i].ne) {
+            for (size_t j = 1; j < data.size(); ++j) {
+                if (teLog >= data[j-1].te && teLog <= data[j].te) {
+                    // Bilinear interpolation
+                    double alpha = (neLog - data[i-1].ne) / (data[i].ne - data[i-1].ne);
+                    double beta = (teLog - data[j-1].te) / (data[j].te - data[j-1].te);
+
+                    double rate1 = data[i-1].rate + alpha * (data[i].rate - data[i-1].rate);
+                    double rate2 = data[j-1].rate + beta * (data[j].rate - data[j-1].rate);
+
+                    rateResult = rate1 + beta * (rate2 - rate1);
+                    return pow(10.0, rateResult) * plasmaData[0];
+                }
+            }
+        }
+    }
+    return pow(10.0, rateResult) * plasmaData[0];
+}
+
+
+
+double Update::get_recombination_rates(double *x, int mass, int charge) {
+    // Get temperature and density:
+    std::vector<double> plasmaData = get_density_temperature(x);
+    std::vector<DataPointRate> data = getCachedRecombRates(mass, charge);
+
+    double neLog = log10(plasmaData[0]);
+    double teLog = log10(plasmaData[1]);
+    double rateResult = 0.0;
+
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (neLog >= data[i-1].ne && neLog <= data[i].ne) {
+            for (size_t j = 1; j < data.size(); ++j) {
+                if (teLog >= data[j-1].te && teLog <= data[j].te) {
+                    // Bilinear interpolation
+                    double alpha = (neLog - data[i-1].ne) / (data[i].ne - data[i-1].ne);
+                    double beta = (teLog - data[j-1].te) / (data[j].te - data[j-1].te);
+
+                    double rate1 = data[i-1].rate + alpha * (data[i].rate - data[i-1].rate);
+                    double rate2 = data[j-1].rate + beta * (data[j].rate - data[j-1].rate);
+
+                    rateResult = rate1 + beta * (rate2 - rate1);
+                    return pow(10.0, rateResult) * plasmaData[0];
+                }
+            }
+        }
+    }
+    return pow(10.0, rateResult) * plasmaData[0];
+}
+
+

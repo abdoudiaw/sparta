@@ -25,6 +25,21 @@ namespace SPARTA_NS {
 struct DataPoint {    // Added for representing the magnetic field data
     double r, z, br, bz;
 };
+
+struct DataPointPlasma {    // Added for representing the magnetic field data
+    double r, z, ne, te;
+};
+
+struct DataPointRate {    // Added for representing the magnetic field data
+    double ne, te, rate;
+};
+
+struct PlasmaData {
+    double density;
+    double temperature;
+};
+
+
 class Update : protected Pointers {
  public:
   bigint ntimestep;               // current timestep
@@ -107,6 +122,17 @@ class Update : protected Pointers {
   const std::vector<DataPoint>& getCachedData();
   // As loadData is a helper function for getCachedData, it can be made private or protected
   // public methods
+
+      std::vector<double> get_density_temperature(double *) ;
+    std::vector<DataPointPlasma> cachedDataPlasma;       // To store the cached magnetic field data
+     std::vector<DataPointRate> cachedDataIonizationRates;
+     std::vector<DataPointRate> cachedDataRecombRates;
+    const std::vector<DataPointPlasma>& getCachedPlasmaData();
+    const std::vector<DataPointRate>& getCachedIonizationRates(int, int);
+    const std::vector<DataPointRate>& getCachedRecombRates(int , int );
+    double  get_ionization_rates(double *, int , int );
+    double get_recombination_rates(double *, int , int );
+
 
   Update(class SPARTA *);
   ~Update();
@@ -218,6 +244,14 @@ class Update : protected Pointers {
 
   void get_magnetic_field( double *, double *);
   void pusher_boris(double *, double *, double *, double , double , double );
+
+     std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
+
+   std::vector<DataPointRate> loadDataRate(const std::string& filename); // Helper function to load the data from the file
+
+   std::string cachedFilename;  // <-- Add this line
+   std::string cachedIonFilename;
+   std::string cachedRecomFilename;
 };
 
 }
