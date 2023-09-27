@@ -151,7 +151,7 @@ Grid::Grid(SPARTA *sparta) : Pointers(sparta)
 
   cut2d = NULL;
   cut3d = NULL;
-  
+
   // allocate hash for cell IDs
 
   hash = new MyHash();
@@ -305,6 +305,8 @@ void Grid::add_child_cell(cellint id, int level, double *lo, double *hi)
     ci->volume = (hi[0]-lo[0]) * (hi[1]-lo[1]) * (hi[2]-lo[2]);
   else if (domain->axisymmetric)
     ci->volume = MY_PI * (hi[1]*hi[1]-lo[1]*lo[1]) * (hi[0]-lo[0]);
+    // printf("ci->volume = %f\n", ci->volume);
+    // printf("hi[1]*hi[1]-lo[1]*lo[1]
   else
     ci->volume = (hi[0]-lo[0]) * (hi[1]-lo[1]);
 

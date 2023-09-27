@@ -614,6 +614,10 @@ template < int NEARCP > void Collide::collisions_group()
     np = cinfo[icell].count;
     if (np <= 1) continue;
     ip = cinfo[icell].first;
+    // printf("icell %d np %d\n",icell,np);
+    // print weight  and volume
+    // printf("weight % volume %g\n",cinfo[icell].weight,cinfo[icell].volume);
+
     volume = cinfo[icell].volume / cinfo[icell].weight;
     if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
 

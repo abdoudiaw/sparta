@@ -56,6 +56,10 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double pre_ave_rotdof = (species[isp].rotdof + species[jsp].rotdof)/2.0;
 
   int n = reactions[isp][jsp].n;
+
+  //  printf(" loop over possible reactions for these 2 species\n");
+//  printf( " we have %d reactions\n",n);
+
   if (n == 0) return 0;
   int *list = reactions[isp][jsp].list;
 
@@ -65,6 +69,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double random_prob = random->uniform();
 
   // loop over possible reactions for these 2 species
+
 
   for (int i = 0; i < n; i++) {
     r = &rlist[list[i]];
@@ -77,7 +82,12 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
 
     e_excess = ecc - r->coeff[1];
-    if (e_excess <= 0.0) continue;
+
+    if (e_excess <= 0.0) 
+    { 
+          printf("e_excess = %f\n",e_excess);
+      continue;
+    }
 
     // compute probability of reaction
 
@@ -89,6 +99,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         react_prob += r->coeff[2] *
           pow(ecc-r->coeff[1],r->coeff[3]) *
           pow(1.0-r->coeff[1]/ecc,r->coeff[5]);
+          printf("react_prob = %f\n",react_prob);
         break;
       }
 

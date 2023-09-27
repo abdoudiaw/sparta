@@ -113,6 +113,7 @@ void ReactBird::init()
   // convert species IDs to species indices
   // flag reactions as active/inactive depending on whether all species exist
   // mark recombination reactions inactive if recombflag_user = 0
+    printf("Initializing bird!\n");
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *r = &rlist[m];
@@ -238,6 +239,8 @@ void ReactBird::init()
     double mr = species[isp].mass * species[jsp].mass /
         (species[isp].mass + species[jsp].mass);
     double sigma = MY_PI*diam*diam;
+
+    printf("sigma %g", sigma);
 
     // average DOFs participating in the reaction
 
@@ -852,6 +855,7 @@ void ReactBird::print_reaction(OneReaction *r)
 void ReactBird::print_reaction_ambipolar(OneReaction *r)
 {
   if (comm->me) return;
+  printf("check ambipolar reaction:\n");
   printf("Bad ambipolar reaction format:\n");
   printf("  type %d style %d\n",r->type,r->style);
   printf("  nreactant %d:",r->nreactant);

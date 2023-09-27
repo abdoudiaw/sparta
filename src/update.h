@@ -17,9 +17,14 @@
 
 #include "math.h"
 #include "pointers.h"
+#include <vector>
+#include <string>
 
 namespace SPARTA_NS {
 
+struct DataPoint {    // Added for representing the magnetic field data
+    double r, z, br, bz;
+};
 class Update : protected Pointers {
  public:
   bigint ntimestep;               // current timestep
@@ -95,6 +100,12 @@ class Update : protected Pointers {
   class Compute **slist_active;   // list of active surf Computes this step
   class Compute **blist_active;   // list of active boundary Computes this step
 
+
+// Caching mechanism additions:
+  std::vector<DataPoint> cachedData;       // To store the cached magnetic field data
+  // Method to handle data retrieval with caching
+  const std::vector<DataPoint>& getCachedData();
+  // As loadData is a helper function for getCachedData, it can be made private or protected
   // public methods
 
   Update(class SPARTA *);
@@ -110,6 +121,10 @@ class Update : protected Pointers {
   int split2d(int, double *);
 
  protected:
+
+     std::vector<DataPoint> loadData(const std::string& filename); // Helper function to load the data from the file
+
+
   int me,nprocs;
   int maxmigrate;            // max # of particles in mlist
   class RanKnuth *random;     // RNG for particle timestep moves
@@ -198,7 +213,11 @@ class Update : protected Pointers {
   //       unless possibly include modify.h and fix.h in this file
   void field_per_particle(int, int, double, double *, double *);
   void field_per_grid(int, int, double, double *, double *);
-  double readfile(double, double, int);
+
+  //
+
+  void get_magnetic_field( double *, double *);
+  void pusher_boris(double *, double *, double *, double , double , double );
 };
 
 }

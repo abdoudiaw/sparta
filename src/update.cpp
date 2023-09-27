@@ -38,6 +38,13 @@
 #include "math_extra.h"
 #include "memory.h"
 #include "error.h"
+#include <vector>
+#include <iostream>
+#include <fstream>
+
+#include <string>  
+#include </Users/42d/opt/anaconda3/include/H5Cpp.h>
+#include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
 
 using namespace SPARTA_NS;
 
@@ -52,8 +59,6 @@ enum{NOFIELD,CFIELD,PFIELD,GFIELD};             // several files
 
 #define MAXSTUCK 20
 #define EPSPARAM 1.0e-7
-
-#define MAXLINE 256
 
 // either set ID or PROC/INDEX, set other to -1
 
@@ -130,12 +135,12 @@ void Update::set_units(const char *style)
   // http://physics.nist.gov/cuu/Constants/Table/allascii.txt
 
   if (strcmp(style,"cgs") == 0) {
-    boltz = 1.3806488e-16;
+    boltz = 1.380649e-16;
     mvv2e = 1.0;
     dt = 1.0;
 
   } else if (strcmp(style,"si") == 0) {
-    boltz = 1.3806488e-23;
+    boltz = 1.380649e-23;
     mvv2e = 1.0;
     dt = 1.0;
 
@@ -456,13 +461,19 @@ template < int DIM, int SURF, int OPT > void Update::move()
 
       x = particles[i].x;
       v = particles[i].v;
-      Particle::Species *species = particle->species;
-      // int isp = i->ispecies;
-      double imass = species[i].mass;
-      double icharge = species[i].charge;
-      // double _mu = species[0].mass;
 
-      printf("v[0] = %f, v[1] = %f, v[2] = %f, mass = %e, charge = %e\n", v[0], v[1], v[2],imass, icharge);
+      // get particle physical properties
+      double electron_charge = 1.60217662e-19;
+      ipart = &particles[i];
+      Particle::Species *species = particle->species;
+      int isp = ipart->ispecies;
+      double mass = species[isp].mass;
+      double charge = species[isp].charge * electron_charge;
+      // get magnetic field at particle position
+      double B[3];
+      // get_magnetic_field(i, x, B);
+    
+
       exclude = -1;
 
       // apply moveperturb() to PKEEP and PINSERT since are computing xnew
@@ -471,76 +482,33 @@ template < int DIM, int SURF, int OPT > void Update::move()
       // let pflag = PEXIT persist to check during axisymmetric cell crossing
 
       if (pflag == PKEEP) {
+        // printf("Advecting pflag == PKEEP particle %d\n", i);
         dtremain = dt;
-  
-
-       // update position and velocity using a magnetic field Bx, By and Bz
-        // this is a leapfrog integration
-        // v= v + dt/2 * (q/m) * (E + v x B)
-
-        double  r = x[0];
-        double  z = x[1];
-        double  Bx =0 ; //readfile(r,z,2);
-        double  By = 0; //readfile(r,z,3);
-        double b_phi = 0; //readfile(r,z,4);
-        // double  b_phi = readfile(r,z,2);
-        // double  Bx = readfile(r,z,3);
-        // double  By =  readfile(r,z,4);
-        // printf("Bx = %f, By = %f, Bz = %f\n",Bx,By,b_phi);
-        /* R,Z,b_phi,b_r,b_z,T_e,n_e,v_e,t_i,n_i,v_i*/
-        // readfile(double r, double z, int field)
-        //  Update velocity using a magnetic field Bx, By and Bz
-
-        double  e = 1.60217662e-19;
-        double  mp = 9.10938356e-31;
-        double qmdt2 = 0.5 * icharge * e/ imass * dt;
-        double tau_x = qmdt2 * Bx;
-        double tau_y = qmdt2 * By;
-        double tau_z = qmdt2 * b_phi;
-        double ex = 100.0;
-        double ey = 0.0;
-        double ez = 0.0;
-
-        double tau_2 = tau_x*tau_x + tau_y*tau_y + tau_z*tau_z;
-
-        // printf("tau_2 = %f\n", tau_2);
-        double s = 2.0 / (1.0 + tau_2);
-        double vminusx = v[0] + qmdt2 * ex;
-        double vminusy = v[1] + qmdt2 * ey;
-        double vminusz = v[2] + qmdt2 * ez;
-
-        double sx = tau_x * s;
-        double sy = tau_y * s;
-        double sz = tau_z * s;
-
-        double vprime_x = vminusx + (vminusy * sz - vminusz * sy);
-        double vprime_y = vminusy + (vminusz * sx - vminusx * sz);
-        double vprime_z = vminusz + (vminusx * sy - vminusy * sx);
-
-        // Get new velocities
-        v[0] = vprime_x + qmdt2 * ex;
-        v[1] = vprime_y + qmdt2 * ey;
-        v[2] = vprime_z + qmdt2 * ez;
-
-        // // print new velocities
-  
-        // printf("v[0] = %f, v[1] = %f, v[2] = %f, mass = %f\n", v[0], v[1], v[2], particles[i].dtremain);
+        // check whether charge is zero
+        if (charge == 0.0) {
+          xnew[0] = x[0] + dtremain*v[0];
+          xnew[1] = x[1] + dtremain*v[1];
+          if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
+          if (perturbflag)
+            (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
+          // continue;
+        }
+        else{
+          pusher_boris(x, v, xnew, charge, mass,  dtremain);         
+        }
 
 
-        xnew[0] = x[0] + dtremain*v[0];
-        xnew[1] = x[1] + dtremain*v[1];
-        if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
-        if (perturbflag)
-          (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
+      // printf("B field at particle %d: %g %g %g\n", i, B[0], B[1], B[2]);
       } else if (pflag == PINSERT) {
+        // printf("Advecting pflag == PINSERT particle %d\n", i);
         dtremain = particles[i].dtremain;
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
-
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
         if (perturbflag)
           (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
       } else if (pflag == PENTRY) {
+        printf("Advecting pflag == PENTRY particle %d\n", i);
         icell = particles[i].icell;
         if (cells[icell].nsplit > 1) {
           if (DIM == 3 && SURF) icell = split3d(icell,x);
@@ -552,11 +520,13 @@ template < int DIM, int SURF, int OPT > void Update::move()
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
       } else if (pflag == PEXIT) {
+        printf("Advecting pflag == PEXIT particle %d\n", i);
         dtremain = particles[i].dtremain;
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
       } else if (pflag >= PSURF) {
+        printf("Advecting pflag == PSURF particle %d\n", i);
         dtremain = particles[i].dtremain;
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
@@ -587,23 +557,26 @@ template < int DIM, int SURF, int OPT > void Update::move()
           if (DIM == 3) kp = static_cast<int>((xnew[2] - boxlo[2])/dz);
 
           int cellIdx = (kp*grid->uny + jp)*grid->unx + ip + 1;
-          int idx = (*(grid->hash))[cellIdx];
 
           // particle outside ghost grid halo must use standard move
 
-          if (idx != 0) {
+          if (grid->hash->find(cellIdx) != grid->hash->end()) {
+          
+            int icell = (*(grid->hash))[cellIdx];
 
             // reset particle cell and coordinates
 
-            int icell = idx - 1;
             particles[i].icell = icell;
             particles[i].flag = PKEEP;
             x[0] = xnew[0];
             x[1] = xnew[1];
             x[2] = xnew[2];
 
-            if (cells[icell].proc != me)
+            if (cells[icell].proc != me) {
               mlist[nmigrate++] = i;
+              particles[i].flag = PDONE;
+              ncomm_one++;
+            }
 
             continue;
           }
@@ -924,7 +897,6 @@ template < int DIM, int SURF, int OPT > void Update::move()
                 minsurf = isurf;
                 minxc[0] = xc[0];
                 minxc[1] = xc[1];
-                printf("minxc %g %g\n",minxc[0],minxc[1]);
                 if (DIM == 3) minxc[2] = xc[2];
                 if (DIM == 1) {
                   minvc[1] = vc[1];
@@ -1347,7 +1319,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
   // accumulate running totals
 
   niterate_running += niterate;
-  nmove_running += nlocal;
+  nmove_running += particle->nlocal;
   ntouch_running += ntouch_one;
   ncomm_running += ncomm_one;
   nboundary_running += nboundary_one;
@@ -1916,153 +1888,122 @@ int Update::have_mem_limit()
   return mem_limit_flag;
 }
 
-double Update::readfile(double r, double z, int field) {
-  // Declare variables
-  int i, m, nwords;
-  char *eof, *word;
-  double fields[99][5];
-  
-  // Open file
-  FILE* fp = fopen("magnetic_field_data.txt", "r");
-  if (fp == NULL) {
-    error->one(FLERR, "Unable to open file");
-    return 0.0; // return a default value
-  }
+/* ----------------------------------------------------------------------
+   get magnetic field for particle I from x,y,z fields
+    return Bx, By, Bz
+------------------------------------------------------------------------- */
 
-  char line[MAXLINE];
-  fgets(line, MAXLINE, fp); // ignore first line
-
-  // Read data from file
-  for (i = 0; i < 99; i++) {
-    eof = fgets(line, MAXLINE, fp);
-    if (eof == NULL) {
-      printf("Error: Unexpected end of file at line %d\n", i + 1);
-      error->one(FLERR, "Unexpected end of file");
-      return 0.0; // return a default value
+std::vector<DataPoint> Update::loadData(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<DataPoint> data;
+    std::string line;
+    // Skip the header
+    std::getline(file, line);
+    DataPoint point;
+    while (file >> point.r >> point.z >> point.br >> point.bz) {
+        data.push_back(point);
     }
-    nwords = input->count_words(line);
-    if (nwords != 5) {
-      error->one(FLERR, "Bad line in file");
-      return 0.0; // return a default value
-    }
-    // Tokenize the line and convert words to fields
-    for (m = 0; m < 5; m++) {
-      if (m == 0) word = strtok(line, " \t\n\r\f");
-      else word = strtok(NULL, " \t\n\r\f");
-      if (word == NULL) {
-        error->one(FLERR, "Bad line in file");
-        return 0.0; // return a default value
-      }
-      fields[i][m] = atof(word);
-    }
-  }
-  fclose(fp); // Close the file
-
-  // Find the minimum distance and corresponding index
-  double minDist = 1e10;
-  int minIndex = 0;
-  for (i = 0; i < 99; i++) {
-    double R = fields[i][0];
-    double Z = fields[i][1];
-
-    double dist = sqrt(pow(R - r, 2) + pow(Z - z, 2));
-    if (dist < minDist) {
-      minDist = dist;
-      minIndex = i;
-    }
-  }
-
-  double qoi_val = fields[minIndex][field];
-  return qoi_val;
+    return data;
 }
 
+Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double x, double z) {
+    Eigen::VectorXd result(2);
+    result << 0, 0;
 
-// double Update::readfile(double r, double z, int field)
-// {
-//   int i, m, nwords;
-//   char *eof, *word;
-//   double **fields;
-//   double *R, *Z, *_qoi;
-//   /* R,Z,b_phi,b_r,b_z,T_e,n_e,v_e,t_i,n_i,v_i*/
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (x >= data[i-1].r && x <= data[i].r) {
+            for (size_t j = 1; j < data.size(); ++j) {
+                if (z >= data[j-1].z && z <= data[j].z) {
+                    // Bilinear interpolation
+                    
+                    double alpha = (x - data[i-1].r) / (data[i].r - data[i-1].r);
+                    double beta = (z - data[j-1].z) / (data[j].z - data[j-1].z);
 
-//    //declare file name
-//   // char file[128];
-//   // open file
-//   FILE* fp = fopen("data.txt", "r");
-//   if (fp == NULL) {
-//     error->one(FLERR, "Unable to open file");
-//     return 0.0; // return a default value
-//   }
+                    double br1 = data[i-1].br + alpha * (data[i].br - data[i-1].br);
+                    double br2 = data[j-1].br + beta * (data[j].br - data[j-1].br);
+                    
+                    double bz1 = data[i-1].bz + alpha * (data[i].bz - data[i-1].bz);
+                    double bz2 = data[j-1].bz + beta * (data[j].bz - data[j-1].bz);
+                    
+                    result(0) = br1 + beta * (br2 - br1);
+                    result(1) = bz1 + beta * (bz2 - bz1);
+                    
+                    return result;
+                }
+            }
+        }
+    }
+    return result;
+}
 
-//   char line[MAXLINE];
-//   fgets(line, MAXLINE, fp); // ignore first line
-//   // initialize n and nfield to appropriate values
-//   int n = 29648;
-//   int nfield = 11;
-//   // allocate memory for fields
-//   fields = new double*[n];
-//   for (i = 0; i < n; i++) {
-//     fields[i] = new double[nfield];
-//   }
+const std::vector<DataPoint>& Update::getCachedData() {
+    if (cachedData.empty()) {
+        cachedData = loadData("bfield.txt");
+    }
+    return cachedData;
+}
 
-//   for (i = 0; i < n; i++) {
-//     eof = fgets(line, MAXLINE, fp);
-//     if (eof == NULL) {
-//     printf("Error: Unexpected end of file at line %d\n", i+1);
-//       error->one(FLERR, "Unexpected end of file");
-//       return 0.0; // return a default value
-//     }
-//     nwords = input->count_words(line);
-//     if (nwords != nfield) {
-//       error->one(FLERR, "Bad line in file");
-//       return 0.0; // return a default value
-//     }
-//     // tokenize the line and convert words to fields
-//     for (m = 0; m < nfield; m++) {
-//       if (m == 0) word = strtok(line, " \t\n\r\f");
-//       else word = strtok(NULL, " \t\n\r\f");
-//       if (word == NULL) {
-//         error->one(FLERR, "Bad line in file");
-//         return 0.0; // return a default value
-//       }
-//       fields[i][m] = atof(word);
-//     }
-//   }
-//   double minDist = 1e10;
-//   int minIndex = 0;
-//   for (i = 0; i < n; i++) {
-//     R = new double;
-//     Z = new double;
-//     _qoi = new double;
-    
-    
-//     *R = fields[i][0];
-//     *Z = fields[i][1];
-//     *_qoi = fields[i][field];
+void Update::get_magnetic_field( double *x, double *B)
+{
+    std::vector<DataPoint> data = getCachedData();
+    auto interpolatedValues = interpolate(data, x[0], x[1]);
+    B[0] =  interpolatedValues(0);
+    B[1] =  interpolatedValues(1);
+    B[2] = 0.0;
 
-//     // // print R and Z AND qoi
-//     // printf("R = %f, Z = %f, qoi = %f\n", *R, *Z, *_qoi);
+}
 
-//     double dist = sqrt(pow(*R - r, 2) + pow(*Z - z, 2));
-//     if (dist < minDist) {
-//       minDist = dist;
-//       minIndex = i;
-//     }
+void Update::pusher_boris(double *x, double *v, double *xnew, double charge, double mass, double dt)
+{
+    // Compute the electric field (if you have one). 
+    // Here, I'm assuming it's zero for simplicity.
+    double E[3] = {0.0, 0.0, 0.0};
+    double B[3];
+    get_magnetic_field(x, B);
+    // Half electric field update
+    for (int i = 0; i < 3; i++) {
+        v[i] += charge * E[i] * dt / (2.0 * mass);
+    }
 
-//   delete R;
-//   delete Z;
-//   delete _qoi;
-//   }
+    // Magnetic field rotation
+    double qom = 0.5 * dt * charge / mass; // charge-to-mass ratio times dt/2
 
-//   double qoi_val = fields[minIndex][field];
-//   // print value of qoi
-  
-//   // deallocate memory for fields
-//   for (i = 0; i < n; i++) {
-//   delete [] fields[i];
-//   }
-//   delete [] fields;
+    // Compute the t-vector for magnetic field rotation
+    double t[3] = {
+        qom * B[0],
+        qom * B[1],
+        qom * B[2]
+    };
 
-//   fclose(fp); // close the file
-//   return qoi_val;
-// }
+    // Compute the magnitude of t squared
+    double tsq = t[0] * t[0] + t[1] * t[1] + t[2] * t[2];
+
+    // Calculate v-prime (v' = v + v x t)
+    double vprime[3] = {
+        v[1] * t[2] - v[2] * t[1] + v[0],
+        v[2] * t[0] - v[0] * t[2] + v[1],
+        v[0] * t[1] - v[1] * t[0] + v[2]
+    };
+
+    // Calculate s-vector (s = 2t / (1 + t^2))
+    double s[3] = {
+        2.0 * t[0] / (1.0 + tsq),
+        2.0 * t[1] / (1.0 + tsq),
+        2.0 * t[2] / (1.0 + tsq)
+    };
+
+    // Update velocity using s (v_new = v' + v x s)
+    v[0] = vprime[1] * s[2] - vprime[2] * s[1] + vprime[0];
+    v[1] = vprime[2] * s[0] - vprime[0] * s[2] + vprime[1];
+    v[2] = vprime[0] * s[1] - vprime[1] * s[0] + vprime[2];
+
+    // Half electric field update
+    for (int i = 0; i < 3; i++) {
+        v[i] += charge * E[i] * dt / (2.0 * mass);
+    }
+
+    // Update position
+    for (int i = 0; i < 3; i++) {
+        xnew[i]  = x[i] + v[i] * dt;
+    }
+}

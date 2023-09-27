@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.12.0)
 
 project(SPARTA)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(SPARTA_BUILD_VER "1.0.0")
 set(SPARTA_API_VER "1")
 

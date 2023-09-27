@@ -171,6 +171,7 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
 
  nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
 
+
  if (remainflag) {
    nattempt += remain[icell][igroup][jgroup];
    remain[icell][igroup][jgroup] = nattempt - static_cast<int> (nattempt);
@@ -213,6 +214,8 @@ int CollideVSS::test_collision(int icell, int igroup, int jgroup,
 void CollideVSS::setup_collision(Particle::OnePart *ip, Particle::OnePart *jp)
 {
   Particle::Species *species = particle->species;
+
+  // printf("setting up collisions!");
 
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
@@ -263,10 +266,12 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
   // if a 3rd particle is created, its kspecies >= 0 is returned
   // if 2nd particle is removed, its jspecies is set to -1
 
+
   if (react)
-    reactflag = react->attempt(ip,jp,
+    {reactflag = react->attempt(ip,jp,
                                precoln.etrans,precoln.erot,
                                precoln.evib,postcoln.etotal,kspecies);
+                              }
   else reactflag = 0;
 
   // repartition energy and perform velocity scattering for I,J,K particles

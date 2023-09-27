@@ -56,6 +56,6 @@ stats_style         step cpu np nattempt ncoll nsreact c_temp &
 #                    surf proc 0.01 size 512 512 zoom 1.75
 #dump_modify	    2 pad 4 pdiam 6*10 0.2 pdiam 1*5 0.01
 
-stats               100
+stats               1000
 
-run                 1000
+run                 5000
