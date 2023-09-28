@@ -23,7 +23,12 @@ SurfReactStyle(prob,SurfReactProb)
 
 #include "surf_react.h"
 
+
 namespace SPARTA_NS {
+
+// struct DataPointPlasma {    // Added for representing the magnetic field data
+//     double r, z, ne, te;
+// };
 
 class SurfReactProb : public SurfReact {
  public:
@@ -70,6 +75,11 @@ class SurfReactProb : public SurfReact {
   virtual void init_reactions();
   void readfile(char *);
   int readone(char *, char *, int &, int &);
+    double wierzbicki_biersack(double , double , double , double , double );
+    double getElectricPotential(double , double , double , double );
+
+    //  std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
+
 };
 
 }

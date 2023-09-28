@@ -23,7 +23,7 @@
 namespace SPARTA_NS {
 
 struct DataPoint {    // Added for representing the magnetic field data
-    double r, z, br, bz;
+    double r, z, y, br, bz, bt;
 };
 
 struct DataPointPlasma {    // Added for representing the magnetic field data
@@ -132,6 +132,7 @@ class Update : protected Pointers {
     const std::vector<DataPointRate>& getCachedRecombRates(int , int );
     double  get_ionization_rates(double *, int , int );
     double get_recombination_rates(double *, int , int );
+      void get_magnetic_field( double *, double *);
 
 
   Update(class SPARTA *);
@@ -242,7 +243,6 @@ class Update : protected Pointers {
 
   //
 
-  void get_magnetic_field( double *, double *);
   void pusher_boris(double *, double *, double *, double , double , double );
 
      std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file

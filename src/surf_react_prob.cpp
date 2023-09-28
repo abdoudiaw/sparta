@@ -22,10 +22,21 @@
 #include "math_extra.h"
 #include "memory.h"
 #include "error.h"
-
+#include <cmath>
+#include <iostream>
+#include <map>
+#include <vector>
+#include <fstream>
+#include "random_knuth.h"
+#include <string>  
+#include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
+#include <random>
+#include <iostream>
+#include "surf.h"
+#include "grid.h"
 using namespace SPARTA_NS;
 
-enum{DISSOCIATION,EXCHANGE,RECOMBINATION};
+enum{DISSOCIATION,EXCHANGE,RECOMBINATION,SPUTTERING};
 enum{SIMPLE};
 
 #define MAXREACTANT 1
@@ -114,65 +125,118 @@ void SurfReactProb::init()
    if dissociation, add particle and return ptr JP
 ------------------------------------------------------------------------- */
 
+
 int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
                          Particle::OnePart *&jp, int &)
 {
   int n = reactions[ip->ispecies].n;
   if (n == 0) return 0;
-
   int *list = reactions[ip->ispecies].list;
-
   // probablity to compare to reaction probability
-
+  double v3[3];
+  double x3[3];
   double react_prob = 0.0;
   double random_prob = random->uniform();
-
-  // loop over possible reactions for this species
-  // if dissociation performs a realloc:
-  //   make copy of x,v with new species
-  //   rot/vib energies will be reset by SurfCollide
-  //   repoint ip to new particles data struct if reallocated
+  double joule2ev = 6.24150934e18;
+  // target info
+  double mass_target = 184.0;
+  double charge_target = 74.0;
+  double mproton = 1.67262158e-27;
 
   OneReaction *r;
 
   for (int i = 0; i < n; i++) {
     r = &rlist[list[i]];
-    react_prob += r->coeff[0];
+    r->reactants[i] = particle->find_species(r->id_reactants[i]);
+    // get velocities
+    int isp = r->reactants[i];
+    double mass_incident = particle->species[isp].mass;
+    double charge_incident = particle->species[isp].charge;
+    for (int j = 0; j < 3; j++) {
+      v3[j] = ip->v[j];
+      x3[j] = ip->x[j];
+    }
 
-    if (react_prob > random_prob) {
+    std::vector<double> plasmaData = update->get_density_temperature(x3);
+    double B[3];
+    update->get_magnetic_field( x3, B);
+
+    // std::vector<DataPointRate> data = getCachedIonizationRates(mass, charge);
+
+    double ne = plasmaData[0];
+    double te = plasmaData[1];
+    Grid::ChildCell *cells = grid->cells;
+    Grid::SplitInfo *sinfo = grid->sinfo;
+    Surf::Tri *tri;
+    Surf::Tri *tris = surf->tris;
+
+    Surf::Line *lines = surf->lines;
+    Surf::Line *line;
+    int icell = ip->icell;
+     
+
+    // int isurf = csurfs[nsurf];
+    line = &lines[icell];
+    printf("prob icell is %d\n",icell);
+    double p1[3] = {line->p1[0], line->p1[1], line->p1[2]};
+    double p2[3] = {line->p2[0], line->p2[1], line->p2[2]};
+    
+    // Calculate the direction vector of the line
+    double direction[3];
+    for (int i = 0; i < 3; ++i) {
+    direction[i] = p2[i] - p1[i];
+    }
+    // Calculate the normal vector
+    double normal[3];
+    normal[0] = -direction[1];  // Swap and negate x and y components
+    normal[1] = direction[0];
+    normal[2] = direction[2];   // Z component remains unchanged
+    // Normalize the normal vector (optional)
+    double magnitude = sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+    if (magnitude > 0.0) {
+        for (int i = 0; i < 3; ++i) {
+            normal[i] /= magnitude;
+        }
+    }
+    printf("prob x3 %f %f %f\n",x3[0],x3[1],x3[2]);
+
+printf("prob normal = %g %g %g\n",normal[0], normal[1], normal[2]);
+
+
+
+    // printf("line p1 p2 %g %g %g %g %g %g\n",line->p1[0], line->p1[1], line->p1[2], line->p2[0], line->p2[1], line->p2[2]);
+
+    // get normal vector
+    // double nor = line->norm[0];
+    // double *normal = line->norm;
+    // // // printf("nor = %g\n",nor);
+    // printf("Normal = %g %g %g\n",normal[0], normal[1], normal[2]);
+ 
+    // calculate larmor radius
+    double omega_L = charge_incident * MathExtra::lensq3(B) / mass_incident * 1.60217662e-19;
+    double v_th = sqrt(8.0 * 1.60217662e-19 * te / (3.0 * mass_incident));
+    double larmor_radius = v_th / omega_L;
+    double sheathEnergy = getElectricPotential(x3[1], larmor_radius, te, ne);
+
+
+    // get reflection coefficient
+    double energy_incident = 0.5 * mass_incident * MathExtra::lensq3(v3) * joule2ev + sheathEnergy;
+    double react_prob_reflection = wierzbicki_biersack(charge_target, mass_target, charge_incident, mass_incident / mproton, energy_incident);
+
+    // printf("ne te x3 and B sheathEnergy = %g %g %g %g %g %g %g %g %g %g\n",ne, te, x3[0], x3[1], x3[2], B[0], B[1], B[2], larmor_radius, sheathEnergy);
+    // printf("energy_incident react_prob_reflection = %g %g\n",energy_incident, react_prob_reflection);
+    if (react_prob_reflection > random_prob) {
       nsingle++;
       tally_single[list[i]]++;
       switch (r->type) {
-      case DISSOCIATION:
-        {
-          double x[3],v[3];
-          ip->ispecies = r->products[0];
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,ip->x,3*sizeof(double));
-          memcpy(v,ip->v,3*sizeof(double));
-          Particle::OnePart *particles = particle->particles;
-          int reallocflag =
-            particle->add_particle(id,r->products[1],ip->icell,x,v,0.0,0.0);
-          if (reallocflag) ip = particle->particles + (ip - particles);
-          jp = &particle->particles[particle->nlocal-1];
-          return (list[i] + 1);
-        }
       case EXCHANGE:
         {
           ip->ispecies = r->products[0];
           return (list[i] + 1);
         }
-      case RECOMBINATION:
-        {
-          ip = NULL;
-          return (list[i] + 1);
-        }
       }
     }
   }
-
-  // no reaction
-
   return 0;
 }
 
@@ -391,17 +455,21 @@ void SurfReactProb::readfile(char *fname)
     if (word[0] == 'D' || word[0] == 'd') r->type = DISSOCIATION;
     else if (word[0] == 'E' || word[0] == 'e') r->type = EXCHANGE;
     else if (word[0] == 'R' || word[0] == 'r') r->type = RECOMBINATION;
+    else if (word[0] == 'P' || word[0] == 'p') r->type = SPUTTERING;
     else error->all(FLERR,"Invalid reaction type in file");
 
     // check that reactant/product counts are consistent with type
 
     if (r->type == DISSOCIATION) {
-      if (r->nreactant != 1 || r->nproduct != 2)
+      if (r->nreactant != 1 || r->nproduct != 1)
         error->all(FLERR,"Invalid dissociation reaction");
     } else if (r->type == EXCHANGE) {
       if (r->nreactant != 1 || r->nproduct != 1)
         error->all(FLERR,"Invalid exchange reaction");
-    } else if (r->type == RECOMBINATION) {
+    } else if (r->type == SPUTTERING) {
+      if (r->nreactant != 1 || r->nproduct != 1)
+        error->all(FLERR,"Invalid sputtering reaction");
+    }     else if (r->type == RECOMBINATION) {
       if (r->nreactant != 1 || r->nproduct != 0)
         error->all(FLERR,"Invalid recombination reaction");
     }
@@ -450,3 +518,48 @@ int SurfReactProb::readone(char *line1, char *line2, int &n1, int &n2)
   return 1;
 }
 
+
+double SurfReactProb::wierzbicki_biersack(double target_Z1, double target_M1, double ion_Z, double ion_M, double energy_eV) {
+    double Z1 = ion_Z;
+    double Z2 = target_Z1;
+    double M1 = ion_M;
+    double M2 = target_M1;
+    double energy_keV = energy_eV / 1E3;
+ 
+    double reduced_energy = 32.55 * energy_keV * M2 / ((M1 + M2) * Z1 * Z2 * (pow(Z1, 0.23) + pow(Z2, 0.23)));
+    double mu = M2 / M1;
+    // printf("mu = %g\n",mu);
+ 
+    double a1 = 5.9638;
+    double b1 = 0.0646;
+    double c1 = 52.211;
+ 
+    double a2 = 1.26E-3;
+    double b2 = -0.9305;
+    double c2 = 1.235;
+ 
+    double RN_mu = std::exp(a1 * std::sqrt(1.0 - b1 * std::pow(std::log(mu / c1), 2.0)));
+    double RN_e = a2 * std::exp(b2 * std::pow(std::log(reduced_energy + 1.0), c2));
+
+ 
+    return RN_mu * RN_e;
+}
+ 
+
+
+double  SurfReactProb::getElectricPotential(double minDistance, double larmorRadius, double te, double ne)  {
+        double m_e = 9.10938356e-31;
+        double m_p = 1.6726219e-27;
+        double debyeLength = 7.43 * std::sqrt(te / ne);
+        double potential_wall = 0.5 * log ( 2 * M_PI * (m_e / m_p) * 2) ;
+        double thresholdForSheathModel =  20; // 200 debye lengths
+        double Lmps = 2 * larmorRadius;
+
+        // if ( minDistance/larmorRadius > thresholdForSheathModel ){
+        //     return 0;
+        // }
+        // else{
+            double result = potential_wall  *  std::exp(- abs(minDistance  / Lmps )) * te  ;
+            return abs(result);
+        // }
+    }

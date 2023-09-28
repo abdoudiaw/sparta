@@ -306,6 +306,9 @@ void DumpParticle::header_binary(bigint ndump)
 
 void DumpParticle::header_item(bigint ndump)
 {
+  double step_one = update->ntimestep;
+  if (step_one > 0.0) {
+//  printf("step_one = %g\n",step_one);
   fprintf(fp,"ITEM: TIMESTEP\n");
   fprintf(fp,BIGINT_FORMAT "\n",update->ntimestep);
   fprintf(fp,"ITEM: NUMBER OF ATOMS\n");
@@ -315,6 +318,7 @@ void DumpParticle::header_item(bigint ndump)
   fprintf(fp,"%g %g\n",boxylo,boxyhi);
   fprintf(fp,"%g %g\n",boxzlo,boxzhi);
   fprintf(fp,"ITEM: ATOMS %s\n",columns);
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -618,7 +622,10 @@ void DumpParticle::write_binary(int n, double *mybuf)
 
 void DumpParticle::write_string(int n, double *mybuf)
 {
+    double step_one = update->ntimestep;
+  if (step_one > 0.0) {
   fwrite(mybuf,sizeof(char),n,fp);
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -627,6 +634,8 @@ void DumpParticle::write_text(int n, double *mybuf)
 {
   int i,j;
 
+  double step_one = update->ntimestep;
+  if (step_one > 0.0) {
   int m = 0;
   for (i = 0; i < n; i++) {
     for (j = 0; j < size_one; j++) {
@@ -637,6 +646,7 @@ void DumpParticle::write_text(int n, double *mybuf)
       m++;
     }
     fprintf(fp,"\n");
+  }
   }
 }
 

@@ -30,6 +30,7 @@
 #include "math_const.h"
 #include "math_extra.h"
 #include "error.h"
+#include "update.h"
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -241,22 +242,18 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
   // specular reflection
   // reflect incident v around norm
 
-  if (random->uniform() > acc) {
-    MathExtra::reflect3(p->v,norm);
-
-  // diffuse reflection
-  // vrm = most probable speed of species, eqns (4.1) and (4.7)
-  // vperp = velocity component perpendicular to surface along norm, eqn (12.3)
-  // vtan12 = 2 velocity components tangential to surface
-  // tangent1 = component of particle v tangential to surface,
-  //   check if tangent1 = 0 (normal collision), set randomly
-  // tangent2 = norm x tangent1 = orthogonal tangential direction
-  // tangent12 are both unit vectors
-
-  } else {
     double tangent1[3],tangent2[3];
     Particle::Species *species = particle->species;
     int ispecies = p->ispecies;
+    int icell = p->icell;
+      printf("surf collide diffuse icell is %d\n",icell);
+    double *x3 = p->x;
+    printf("surf collide diffuse x3 %f %f %f\n",x3[0],x3[1],x3[2]);
+
+    // get temperature of surface
+    std::vector<double> plasmaData = update->get_density_temperature(x3);
+    double converteV2K = 11604.505;
+    double twall = plasmaData[1] * converteV2K;
 
     double vrm = sqrt(2.0*update->boltz * twall / species[ispecies].mass);
     double vperp = vrm * sqrt(-log(random->uniform()));
@@ -268,6 +265,26 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
 
     double *v = p->v;
     double dot = MathExtra::dot3(v,norm);
+
+    // Normalize vector v
+    double v_magnitude = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    double vnew[3];
+    vnew[0] = v[0]/v_magnitude;
+    vnew[1] = v[1]/v_magnitude;
+    vnew[2] = v[2]/v_magnitude;
+
+    // Normalize vector norm
+    double norm_magnitude = sqrt(norm[0]*norm[0] + norm[1]*norm[1] + norm[2]*norm[2]);
+    // print norm 1 2 3
+    double normnew[3];
+    normnew[0] = norm[0]/norm_magnitude;
+    normnew[1] = norm[1]/norm_magnitude;
+    normnew[2] = norm[2]/norm_magnitude;
+    // printf("normnew %f %f %f\n",normnew[0],normnew[1],normnew[2]);
+    printf("surf collide diffuse normal = %g %g %g\n",normnew[0], normnew[1], normnew[2]);
+
+    double dot2 = MathExtra::dot3(vnew,normnew);
+    double incident_theta = acos(dot2);
 
     double beta_un,normalized_distbn_fn;
 
@@ -335,7 +352,7 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
 
     p->erot = particle->erot(ispecies,twall,random);
     p->evib = particle->evib(ispecies,twall,random);
-  }
+  
 }
 
 /* ----------------------------------------------------------------------

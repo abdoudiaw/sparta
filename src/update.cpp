@@ -1931,7 +1931,7 @@ int Update::have_mem_limit()
 
 /* ----------------------------------------------------------------------
    get magnetic field for particle I from x,y,z fields
-    return Bx, By, Bz
+    return Bx,  Bz, Bt 
 ------------------------------------------------------------------------- */
 
 std::vector<DataPoint> Update::loadData(const std::string& filename) {
@@ -1941,34 +1941,47 @@ std::vector<DataPoint> Update::loadData(const std::string& filename) {
     // Skip the header
     std::getline(file, line);
     DataPoint point;
-    while (file >> point.r >> point.z >> point.br >> point.bz) {
+    while (file >> point.r >> point.z >> point.y >> point.br >> point.bz >> point.bt) {
         data.push_back(point);
     }
     return data;
 }
 
-Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double x, double z) {
-    Eigen::VectorXd result(2);
-    result << 0, 0;
+
+Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double *position) {
+    Eigen::VectorXd result(3);
+    result << 0, 0, 0;  // Initialize to zeros
+
+    double x = position[0];
+    double z = position[1];
+    double y = position[2];
 
     for (size_t i = 1; i < data.size(); ++i) {
         if (x >= data[i-1].r && x <= data[i].r) {
             for (size_t j = 1; j < data.size(); ++j) {
                 if (z >= data[j-1].z && z <= data[j].z) {
                     // Bilinear interpolation
-                    
+
                     double alpha = (x - data[i-1].r) / (data[i].r - data[i-1].r);
                     double beta = (z - data[j-1].z) / (data[j].z - data[j-1].z);
+                    double gamma = (y - data[j-1].y) / (data[j].y - data[j-1].y);
 
                     double br1 = data[i-1].br + alpha * (data[i].br - data[i-1].br);
                     double br2 = data[j-1].br + beta * (data[j].br - data[j-1].br);
-                    
+                    double br3 = data[j-1].br + gamma * (data[j].br - data[j-1].br);
+
                     double bz1 = data[i-1].bz + alpha * (data[i].bz - data[i-1].bz);
                     double bz2 = data[j-1].bz + beta * (data[j].bz - data[j-1].bz);
-                    
-                    result(0) = br1 + beta * (br2 - br1);
-                    result(1) = bz1 + beta * (bz2 - bz1);
-                    
+                    double bz3 = data[j-1].bz + gamma * (data[j].bz - data[j-1].bz);
+
+                    double bt1 = data[i-1].bt + alpha * (data[i].bt - data[i-1].bt);
+                    double bt2 = data[j-1].bt + beta * (data[j].bt - data[j-1].bt);
+                    double bt3 = data[j-1].bt + gamma * (data[j].bt - data[j-1].bt);
+
+                    result(0) = br1 + beta * (br2 - br1) + gamma * (br3 - br1);
+                    result(1) = bz1 + beta * (bz2 - bz1) + gamma * (bz3 - bz1);
+                    result(2) = bt1 + beta * (bt2 - bt1) + gamma * (bt3 - bt1);
+
                     return result;
                 }
             }
@@ -1976,6 +1989,7 @@ Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double x, double
     }
     return result;
 }
+
 
 const std::vector<DataPoint>& Update::getCachedData() {
     if (cachedData.empty()) {
@@ -1987,10 +2001,10 @@ const std::vector<DataPoint>& Update::getCachedData() {
 void Update::get_magnetic_field( double *x, double *B)
 {
     std::vector<DataPoint> data = getCachedData();
-    auto interpolatedValues = interpolate(data, x[0], x[1]);
+    auto interpolatedValues = interpolate(data, x);
     B[0] =  interpolatedValues(0);
     B[1] =  interpolatedValues(1);
-    B[2] = 0.0;
+    B[2] = interpolatedValues(2);
 
 }
 
@@ -2123,7 +2137,6 @@ const std::vector<DataPointPlasma>& Update::getCachedPlasmaData() {
     std::vector<double> plasma = { interpolatedValues(0), interpolatedValues(1), 0 };
     return plasma;
 }
-
 
 const std::vector<DataPointRate>& Update::getCachedIonizationRates(int mass, int charge) {
     std::string material;
