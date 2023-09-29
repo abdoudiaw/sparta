@@ -1991,16 +1991,16 @@ Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double *position
 }
 
 
-const std::vector<DataPoint>& Update::getCachedData() {
-    if (cachedData.empty()) {
-        cachedData = loadData("bfield.txt");
+const std::vector<DataPoint>& Update::getCachedDataBfield() {
+    if (CachedDataBfield.empty()) {
+        CachedDataBfield = loadData("bfield.txt");
     }
-    return cachedData;
+    return CachedDataBfield;
 }
 
 void Update::get_magnetic_field( double *x, double *B)
 {
-    std::vector<DataPoint> data = getCachedData();
+    std::vector<DataPoint> data = getCachedDataBfield();
     auto interpolatedValues = interpolate(data, x);
     B[0] =  interpolatedValues(0);
     B[1] =  interpolatedValues(1);
@@ -2089,6 +2089,19 @@ std::vector<DataPointRate> Update::loadDataRate(const std::string& filename) {
     std::getline(file, line);
     DataPointRate point;
     while (file >> point.te >> point.ne >> point.rate) {
+        data.push_back(point);
+    }
+    return data;
+}
+
+std::vector<DataPointReflectionSputtering> Update::loadDataSurfaceData(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<DataPointReflectionSputtering> data;
+    std::string line;
+    // Skip the header
+    std::getline(file, line);
+    DataPointReflectionSputtering point;
+    while (file >> point.angle >> point.energy >> point.rpyld >> point.spyld) {
         data.push_back(point);
     }
     return data;
@@ -2184,6 +2197,27 @@ const std::vector<DataPointRate>& Update::getCachedRecombRates(int mass, int cha
 }
 
 
+const std::vector<DataPointReflectionSputtering>& Update::getCachedDataReflectionSputtering(int mass, int charge) {
+    std::string material;
+    // printf("looking for material with mass mass: %g\n", mass);
+    if (mass == 184) {
+        material = "W";
+    } else if (mass == 16) {
+        material = "O";
+    } else {
+        throw std::runtime_error("Material does not exist in the DB!");
+    }
+    std::string filename = "surfaceData/reflectionYield_" + material + "_on_W.txt";
+
+    // If the cache is empty or if the filename has changed (i.e., new mass or charge), reload data.
+    if (cachedDataSurfaceData.empty() || filename != cachedSurfaceDataFilename) {
+        // std::cout << "Reading file: " << filename << std::endl;
+        cachedDataSurfaceData = loadDataSurfaceData(filename);
+        cachedSurfaceDataFilename = filename;  // Store the current filename to check against future calls.
+    }
+    return cachedDataSurfaceData;
+}
+
 double Update::get_ionization_rates(double *x, int mass, int charge) {
     // Get temperature and density:
     std::vector<double> plasmaData = get_density_temperature(x);
@@ -2217,8 +2251,6 @@ double Update::get_ionization_rates(double *x, int mass, int charge) {
     return pow(10.0, rateResult) * plasmaData[0];
 }
 
-
-
 double Update::get_recombination_rates(double *x, int mass, int charge) {
     // Get temperature and density:
     std::vector<double> plasmaData = get_density_temperature(x);
@@ -2248,4 +2280,55 @@ double Update::get_recombination_rates(double *x, int mass, int charge) {
     return pow(10.0, rateResult) * plasmaData[0];
 }
 
+double Update::get_reflection_coefficient(double energy, double angle, int mass, int charge)
+{
+    std::vector<DataPointReflectionSputtering> data = getCachedDataReflectionSputtering(mass, charge);
+    double result = 0.0;
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (energy >= data[i-1].energy && energy <= data[i].energy) {
+            for (size_t j = 1; j < data.size(); ++j) {
+                if (angle >= data[j-1].angle && angle <= data[j].angle) {
+                    // Bilinear interpolation
+                    double alpha = (energy - data[i-1].energy) / (data[i].energy - data[i-1].energy);
+                    double beta = (angle - data[j-1].angle) / (data[j].angle - data[j-1].angle);
 
+                    double rpyld1 = data[i-1].rpyld + alpha * (data[i].rpyld - data[i-1].rpyld);
+                    double rpyld2 = data[j-1].rpyld + beta * (data[j].rpyld - data[j-1].rpyld);
+
+                    result = rpyld1 + beta * (rpyld2 - rpyld1);
+                    return result;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+
+double Update::get_sputtering_coefficient(double energy, double angle, int mass, int charge)
+{
+    std::vector<DataPointReflectionSputtering> data = getCachedDataReflectionSputtering(mass, charge);
+    double result = 0.0;
+
+    for (size_t i = 1; i < data.size(); ++i) {
+        if (energy >= data[i-1].energy && energy <= data[i].energy) {
+            for (size_t j = 1; j < data.size(); ++j) {
+                if (angle >= data[j-1].angle && angle <= data[j].angle) {
+                    // Bilinear interpolation
+                    double alpha = (energy - data[i-1].energy) / (data[i].energy - data[i-1].energy);
+                    double beta = (angle - data[j-1].angle) / (data[j].angle - data[j-1].angle);
+
+                    double spyld1 = data[i-1].spyld + alpha * (data[i].spyld - data[i-1].spyld);
+                    double spyld2 = data[j-1].spyld + beta * (data[j].spyld - data[j-1].spyld);
+
+                    result = spyld1 + beta * (spyld2 - spyld1);
+                    return result;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+
+// getCachedDataReflectionSputtering

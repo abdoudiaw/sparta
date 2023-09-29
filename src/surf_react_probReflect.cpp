@@ -13,7 +13,7 @@
 ------------------------------------------------------------------------- */
 
 #include "math.h"
-#include "surf_react_prob.h"
+#include "surf_react_probReflect.h"
 #include "input.h"
 #include "update.h"
 #include "comm.h"
@@ -48,7 +48,7 @@ enum{SIMPLE};
 
 /* ---------------------------------------------------------------------- */
 
-SurfReactProb::SurfReactProb(SPARTA *sparta, int narg, char **arg) :
+SurfReactProbReflect::SurfReactProbReflect(SPARTA *sparta, int narg, char **arg) :
   SurfReact(sparta, narg, arg)
 {
   if (narg != 3) error->all(FLERR,"Illegal surf_react prob command");
@@ -85,7 +85,7 @@ SurfReactProb::SurfReactProb(SPARTA *sparta, int narg, char **arg) :
 
 /* ---------------------------------------------------------------------- */
 
-SurfReactProb::~SurfReactProb()
+SurfReactProbReflect::~SurfReactProbReflect()
 {
   if (copy) return;
 
@@ -113,7 +113,7 @@ SurfReactProb::~SurfReactProb()
 
 /* ---------------------------------------------------------------------- */
 
-void SurfReactProb::init()
+void SurfReactProbReflect::init()
 {
   SurfReact::init();
   init_reactions();
@@ -126,7 +126,7 @@ void SurfReactProb::init()
 ------------------------------------------------------------------------- */
 
 
-int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
+int SurfReactProbReflect::react(Particle::OnePart *&ip, int, double *,
                          Particle::OnePart *&jp, int &)
 {
   int n = reactions[ip->ispecies].n;
@@ -142,7 +142,9 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
   double mass_target = 184.0;
   double charge_target = 74.0;
   double mproton = 1.67262158e-27;
+
   OneReaction *r;
+
   for (int i = 0; i < n; i++) {
     r = &rlist[list[i]];
     r->reactants[i] = particle->find_species(r->id_reactants[i]);
@@ -154,14 +156,19 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
       v3[j] = ip->v[j];
       x3[j] = ip->x[j];
     }
+
     std::vector<double> plasmaData = update->get_density_temperature(x3);
     double B[3];
     update->get_magnetic_field( x3, B);
     double ne = plasmaData[0];
     double te = plasmaData[1];
+
     double sheathEnergy = 3.0 * te * charge_incident;
     // get reflection coefficient
     double energy_incident = 0.5 * mass_incident * MathExtra::lensq3(v3) * joule2ev + sheathEnergy;
+    // printf("energy_incident = %g\n",energy_incident);
+    // printf("sheathEnergy = %g\n",sheathEnergy);
+
     // get sputtering coefficient
     double angle_max = 2.0;
     double angle_min = 0.0;
@@ -170,29 +177,17 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
     double reflection_coefficient = update->get_reflection_coefficient(energy_incident,angle_degrees, mass_incident / mproton, charge_incident );
     double sputtering_coefficient = update->get_sputtering_coefficient(energy_incident,angle_degrees, mass_incident / mproton, charge_incident );
 
-    double react_prob_reflection = reflection_coefficient / (reflection_coefficient + sputtering_coefficient);
-    double react_prob_sputtering = sputtering_coefficient / (reflection_coefficient + sputtering_coefficient);
-    
+   double react_prob_reflection = reflection_coefficient / (reflection_coefficient + sputtering_coefficient);
+   double react_prob_sputtering = sputtering_coefficient / (reflection_coefficient + sputtering_coefficient);
 
-     if (react_prob_reflection > random_prob) { 
-      // printf("reflection\n");
+    if (react_prob_reflection > random_prob) {
+      printf("reflection\n");
       nsingle++;
       tally_single[list[i]]++;
       switch (r->type) {
-       case DISSOCIATION:
+      case EXCHANGE:
         {
-          double x[3],v[3];
           ip->ispecies = r->products[0];
-          printf("dissociation\n");
-          printf("ip->ispecies = %d\n",ip->ispecies);
-          int id = MAXSMALLINT*random->uniform();
-          memcpy(x,ip->x,3*sizeof(double));
-          memcpy(v,ip->v,3*sizeof(double));
-          Particle::OnePart *particles = particle->particles;
-          int reallocflag =
-            particle->add_particle(id,r->products[1],ip->icell,x,v,0.0,0.0);
-          if (reallocflag) ip = particle->particles + (ip - particles);
-          jp = &particle->particles[particle->nlocal-1];
           return (list[i] + 1);
         }
       }
@@ -203,14 +198,14 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
 
 /* ---------------------------------------------------------------------- */
 
-char *SurfReactProb::reactionID(int m)
+char *SurfReactProbReflect::reactionID(int m)
 {
   return rlist[m].id;
 }
 
 /* ---------------------------------------------------------------------- */
 
-int SurfReactProb::match_reactant(char *species, int m)
+int SurfReactProbReflect::match_reactant(char *species, int m)
 {
   for (int i = 0; i < rlist[m].nreactant; i++)
     if (strcmp(species,rlist[m].id_reactants[i]) == 0) return 1;
@@ -219,7 +214,7 @@ int SurfReactProb::match_reactant(char *species, int m)
 
 /* ---------------------------------------------------------------------- */
 
-int SurfReactProb::match_product(char *species, int m)
+int SurfReactProbReflect::match_product(char *species, int m)
 {
   for (int i = 0; i < rlist[m].nproduct; i++)
     if (strcmp(species,rlist[m].id_products[i]) == 0) return 1;
@@ -228,7 +223,7 @@ int SurfReactProb::match_product(char *species, int m)
 
 /* ---------------------------------------------------------------------- */
 
-void SurfReactProb::init_reactions()
+void SurfReactProbReflect::init_reactions()
 {
   // convert species IDs to species indices
   // flag reactions as active/inactive depending on whether all species exist
@@ -308,7 +303,7 @@ void SurfReactProb::init_reactions()
 
 /* ---------------------------------------------------------------------- */
 
-void SurfReactProb::readfile(char *fname)
+void SurfReactProbReflect::readfile(char *fname)
 {
   int n,n1,n2,eof;
   char line1[MAXLINE],line2[MAXLINE];
@@ -463,7 +458,7 @@ void SurfReactProb::readfile(char *fname)
    return 1 if end-of-file, else return 0
 ------------------------------------------------------------------------- */
 
-int SurfReactProb::readone(char *line1, char *line2, int &n1, int &n2)
+int SurfReactProbReflect::readone(char *line1, char *line2, int &n1, int &n2)
 {
   char *eof;
   while ((eof = fgets(line1,MAXLINE,fp))) {
@@ -480,7 +475,7 @@ int SurfReactProb::readone(char *line1, char *line2, int &n1, int &n2)
 }
 
 
-double SurfReactProb::wierzbicki_biersack(double target_Z1, double target_M1, double ion_Z, double ion_M, double energy_eV) {
+double SurfReactProbReflect::wierzbicki_biersack(double target_Z1, double target_M1, double ion_Z, double ion_M, double energy_eV) {
     double Z1 = ion_Z;
     double Z2 = target_Z1;
     double M1 = ion_M;
@@ -508,7 +503,7 @@ double SurfReactProb::wierzbicki_biersack(double target_Z1, double target_M1, do
  
 
 
-double  SurfReactProb::getElectricPotential(double minDistance, double larmorRadius, double te, double ne)  {
+double  SurfReactProbReflect::getElectricPotential(double minDistance, double larmorRadius, double te, double ne)  {
         double m_e = 9.10938356e-31;
         double m_p = 1.6726219e-27;
         double debyeLength = 7.43 * std::sqrt(te / ne);

@@ -14,12 +14,12 @@
 
 #ifdef SURF_REACT_CLASS
 
-SurfReactStyle(prob,SurfReactProb)
+SurfReactStyle(probreflect,SurfReactProbReflect)
 
 #else
 
-#ifndef SPARTA_SURF_REACT_PROB_H
-#define SPARTA_SURF_REACT_PROB_H
+#ifndef SPARTA_SURF_REACT_PROBREFLECT_H
+#define SPARTA_SURF_REACT_PROBREFLECT_H
 
 #include "surf_react.h"
 
@@ -27,11 +27,11 @@ SurfReactStyle(prob,SurfReactProb)
 namespace SPARTA_NS {
 
 
-class SurfReactProb : public SurfReact {
+class SurfReactProbReflect : public SurfReact {
  public:
-  SurfReactProb(class SPARTA *, int, char **);
-  SurfReactProb(class SPARTA *sparta) : SurfReact(sparta) {}
-  virtual ~SurfReactProb();
+  SurfReactProbReflect(class SPARTA *, int, char **);
+  SurfReactProbReflect(class SPARTA *sparta) : SurfReact(sparta) {}
+  virtual ~SurfReactProbReflect();
   virtual void init();
   int react(Particle::OnePart *&, int, double *, Particle::OnePart *&, int &);
   char *reactionID(int);

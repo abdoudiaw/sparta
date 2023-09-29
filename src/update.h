@@ -39,6 +39,10 @@ struct PlasmaData {
     double temperature;
 };
 
+struct DataPointReflectionSputtering {    
+    double angle, energy, rpyld, spyld;
+};
+
 
 class Update : protected Pointers {
  public:
@@ -117,22 +121,27 @@ class Update : protected Pointers {
 
 
 // Caching mechanism additions:
-  std::vector<DataPoint> cachedData;       // To store the cached magnetic field data
-  // Method to handle data retrieval with caching
-  const std::vector<DataPoint>& getCachedData();
-  // As loadData is a helper function for getCachedData, it can be made private or protected
+  std::vector<DataPoint> CachedDataBfield;       // To store the cached magnetic field data
+  const std::vector<DataPoint>& getCachedDataBfield();
+
+
   // public methods
 
       std::vector<double> get_density_temperature(double *) ;
     std::vector<DataPointPlasma> cachedDataPlasma;       // To store the cached magnetic field data
      std::vector<DataPointRate> cachedDataIonizationRates;
      std::vector<DataPointRate> cachedDataRecombRates;
+     std::vector<DataPointReflectionSputtering> cachedDataSurfaceData;
     const std::vector<DataPointPlasma>& getCachedPlasmaData();
     const std::vector<DataPointRate>& getCachedIonizationRates(int, int);
     const std::vector<DataPointRate>& getCachedRecombRates(int , int );
+    const std::vector<DataPointReflectionSputtering>& getCachedDataReflectionSputtering(int, int);
+
     double  get_ionization_rates(double *, int , int );
     double get_recombination_rates(double *, int , int );
-      void get_magnetic_field( double *, double *);
+    void get_magnetic_field( double *, double *);
+    double get_reflection_coefficient(double, double, int, int);
+    double get_sputtering_coefficient(double, double, int, int);
 
 
   Update(class SPARTA *);
@@ -245,15 +254,15 @@ class Update : protected Pointers {
 
   void pusher_boris(double *, double *, double *, double , double , double );
 
-     std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
-
+   std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointRate> loadDataRate(const std::string& filename); // Helper function to load the data from the file
+   std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file
 
    std::string cachedFilename;  // <-- Add this line
    std::string cachedIonFilename;
    std::string cachedRecomFilename;
+   std::string cachedSurfaceDataFilename;
 };
-
 }
 
 #endif
