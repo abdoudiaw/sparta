@@ -128,6 +128,7 @@ class DumpParticle : public Dump {
   void pack_ke(int);
   void pack_erot(int);
   void pack_evib(int);
+  void pack_weight(int);
 };
 
 }

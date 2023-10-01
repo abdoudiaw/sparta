@@ -46,7 +46,11 @@
 #include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
 #include <random>
 #include <iostream>
-
+#include "math_const.h"
+static const double eV2Kelvin = 11604.505;
+static const std::string filename = "lim.txt";
+static const double kB = 1.38064852e-23;
+static const double protonCharge = 1.60217662e-19;
 
 using namespace SPARTA_NS;
 
@@ -475,46 +479,6 @@ template < int DIM, int SURF, int OPT > void Update::move()
       // get magnetic field at particle position
       double B[3];
    
-  // // Get ionization and recombinations rates
-    // double ionization_rates =  get_ionization_rates(x, mass/proton_mass, species[isp].charge);
-    // double recombination_rates = get_recombination_rates(x, mass/proton_mass, species[isp].charge);
-
-  
-    // double react_prob_ioniziation = 0.0;
-    // double react_prob_recombination = 0.0;
-    // double current_prob=0;
-    // std::random_device rd;  // Used to seed the engine
-    // std::mt19937 rng(rd()); // Mersenne Twister pseudo-random generator
-    // std::uniform_real_distribution<double> distribution(0.0, 1.0);
-
-    // // Generate a random number
-    // double random_prob_ion = distribution(rng);
-    // double random_prob_rec = distribution(rng);
-    // double small_threshold = 1e-3; // You can adjust this value
-    // double dt_times_ionization = dt * ionization_rates;
-    // double dt_times_recombination = dt * recombination_rates;
-
-    // react_prob_ioniziation = 1.0 - exp(-dt_times_ionization);
-    // react_prob_recombination = 1.0  - exp(-dt_times_recombination);
-    // // printf("react_prob_ioniziation = %g\n", react_prob_ioniziation);
-    // // printf("react_prob_recombination = %g\n", react_prob_recombination);
-    // // printf("random_prob_ion  random_prob_rec = %g %g\n", random_prob_ion, random_prob_rec);
-    // // ionized  if (random_prob < react_prob_ioniziation) {
-    // if (random_prob_ion < react_prob_ioniziation){
-    //     printf("Ionized\n");
-    //     species[isp].charge += 1;
-    //     // push data back to the particle
-    //     // isp
-    // }
-    // printf("species[isp].charge = %d\n", species[isp].charge);
-    // // recombined
-    // if (random_prob_rec <  react_prob_recombination) {
-
-    //     printf("Recombined\n");
-    //     species[isp].charge -= 1;
-    //     // push data back to the particle
-    // }
-
       exclude = -1;
 
       // apply moveperturb() to PKEEP and PINSERT since are computing xnew
@@ -535,7 +499,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
           // continue;
         }
         else{
-          pusher_boris(x, v, xnew, charge, mass,  dtremain);         
+          // Apply collisional diffusion
+          backgroundCollisions(x, v, dtremain, species[isp].mass/ proton_mass, species[isp].charge);
+          pusher_boris(x, v, xnew, charge, mass,  dtremain);      
+          crossFieldDiffusion(xnew, dtremain);   
         }
 
 
@@ -567,7 +534,30 @@ template < int DIM, int SURF, int OPT > void Update::move()
         xnew[1] = x[1] + dtremain*v[1];
         if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
       } else if (pflag >= PSURF) {
-        printf("Advecting pflag == PSURF particle %d\n", i);
+        // get particle icell
+        icell = particles[i].icell;
+       
+
+    // // get temperature of surface
+    double Eb = 11.1; // eV
+    // sample thompson distribution to energy for tungsten
+        
+    double converteV2K = 11604.505;
+    double wall_mass = 184.0 * 1.6726219e-27;
+    double twall = Eb * converteV2K/2;
+    double vrm = sqrt(2.0*update->boltz * twall / wall_mass);
+    double vnorm = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    // Normalize v
+    v[0] /= vnorm;
+    v[1] /= vnorm;
+    v[2] /= vnorm;
+
+    // Scale the normalized v by vrm
+    v[0] *= vrm;
+    v[1] *= vrm;
+    v[2] *= vrm;
+
+        // printf("Advecting pflag == PSURF particle %d\n", i);
         dtremain = particles[i].dtremain;
         xnew[0] = x[0] + dtremain*v[0];
         xnew[1] = x[1] + dtremain*v[1];
@@ -1947,7 +1937,6 @@ std::vector<DataPoint> Update::loadData(const std::string& filename) {
     return data;
 }
 
-
 Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double *position) {
     Eigen::VectorXd result(3);
     result << 0, 0, 0;  // Initialize to zeros
@@ -1990,7 +1979,6 @@ Eigen::VectorXd interpolate(const std::vector<DataPoint>& data, double *position
     return result;
 }
 
-
 const std::vector<DataPoint>& Update::getCachedDataBfield() {
     if (CachedDataBfield.empty()) {
         CachedDataBfield = loadData("bfield.txt");
@@ -2000,7 +1988,8 @@ const std::vector<DataPoint>& Update::getCachedDataBfield() {
 
 void Update::get_magnetic_field( double *x, double *B)
 {
-    std::vector<DataPoint> data = getCachedDataBfield();
+    const std::vector<DataPoint>& data = getCachedDataBfield();
+
     auto interpolatedValues = interpolate(data, x);
     B[0] =  interpolatedValues(0);
     B[1] =  interpolatedValues(1);
@@ -2010,11 +1999,15 @@ void Update::get_magnetic_field( double *x, double *B)
 
 void Update::pusher_boris(double *x, double *v, double *xnew, double charge, double mass, double dt)
 {
-    // Compute the electric field (if you have one). 
-    // Here, I'm assuming it's zero for simplicity.
-    double E[3] = {0.0, 0.0, 0.0};
+
+    double E[3] ;
     double B[3];
+    // get electric and magnetic fields
+    E[1] = std::abs(getElectricPotential(x[0], x[1]));
+    E[0] = 0 ;
+    E[2] = 0;
     get_magnetic_field(x, B);
+
     // Half electric field update
     for (int i = 0; i < 3; i++) {
         v[i] += charge * E[i] * dt / (2.0 * mass);
@@ -2068,18 +2061,35 @@ void Update::pusher_boris(double *x, double *v, double *xnew, double charge, dou
 // read density and temperature profiles:
 ------------------------------------------------------------------------- */
 
+
 std::vector<DataPointPlasma> Update::loadDataPlasma(const std::string& filename) {
     std::ifstream file(filename);
+    if (!file.is_open()) {
+        // Error handling
+        std::cerr << "Unable to open file: " << filename << std::endl;
+        return {};
+    }
+
     std::vector<DataPointPlasma> data;
     std::string line;
+
     // Skip the header
     std::getline(file, line);
-    DataPointPlasma point;
-    while (file >> point.r >> point.z >> point.ne >> point.te) {
+
+    while (std::getline(file, line)) {
+        DataPointPlasma point;
+        std::stringstream ss(line);
+
+        if (!(ss >> point.r >> point.z >> point.vflow >> point.ti >> point.te >> point.ni >> point.ne)) {
+            std::cerr << "Failed to parse line: " << line << std::endl;
+            continue;  
+        }
+
         data.push_back(point);
     }
     return data;
 }
+
 
 std::vector<DataPointRate> Update::loadDataRate(const std::string& filename) {
     std::ifstream file(filename);
@@ -2108,46 +2118,69 @@ std::vector<DataPointReflectionSputtering> Update::loadDataSurfaceData(const std
 }
 
 Eigen::VectorXd interpolatePlasma(const std::vector<DataPointPlasma>& data, double x, double z) {
-    Eigen::VectorXd result(2);
-    result << 0, 0;
+    Eigen::VectorXd result(5); // For the 5 values: vflow, ti, te, ni, and ne
+    result.setZero();
 
-    for (size_t i = 1; i < data.size(); ++i) {
-        if (x >= data[i-1].r && x <= data[i].r) {
-            for (size_t j = 1; j < data.size(); ++j) {
-                if (z >= data[j-1].z && z <= data[j].z) {
-                    // Bilinear interpolation
-                    
-                    double alpha = (x - data[i-1].r) / (data[i].r - data[i-1].r);
-                    double beta = (z - data[j-1].z) / (data[j].z - data[j-1].z);
+    // Determine numRows and numCols
+    double firstZValue = data[0].z;
+    size_t numRows = std::count_if(data.begin(), data.end(), 
+                    [&](const DataPointPlasma& point) {
+                        return point.z == firstZValue; 
+                    });
+    size_t numCols = data.size() / numRows;
 
-                    double  ne1 = data[i-1].ne + alpha * (data[i].ne - data[i-1].ne);
-                    double  ne2 = data[j-1].ne + beta * (data[j].ne - data[j-1].ne);
-                    
-                    double te1 = data[i-1].te + alpha * (data[i].te - data[i-1].te);
-                    double te2 = data[j-1].te + beta * (data[j].te - data[j-1].te);
-                    
-                    result(0) =  ne1 + beta * ( ne2 -  ne1);
-                    result(1) = te1 + beta * (te2 - te1);
-                    
-                    return result;
+    // Loop through the rows and columns to find the surrounding grid points
+    for (size_t i = 1; i < numRows; ++i) {
+        for (size_t j = 1; j < numCols; ++j) {
+
+            // Define four surrounding points for bilinear interpolation
+            DataPointPlasma bl = data[(i-1)*numCols + j-1];  // bottom-left
+            DataPointPlasma br = data[(i-1)*numCols + j];    // bottom-right
+            DataPointPlasma tl = data[i*numCols + j-1];      // top-left
+            DataPointPlasma tr = data[i*numCols + j];        // top-right
+
+            if (x >= bl.r && x <= br.r && z >= bl.z && z <= tl.z) {
+
+                // Calculate the weights (alphas and betas) for bilinear interpolation
+                double alpha = (x - bl.r) / (br.r - bl.r);
+                double beta = (z - bl.z) / (tl.z - bl.z);
+
+                for (int k = 0; k < 5; ++k) {
+                    double valueBottom = bl.getValue(k) + alpha * (br.getValue(k) - bl.getValue(k));
+                    double valueTop = tl.getValue(k) + alpha * (tr.getValue(k) - tl.getValue(k));
+                    result(k) = valueBottom + beta * (valueTop - valueBottom);
                 }
+
+                return result;
             }
         }
     }
+
     return result;
 }
 
 const std::vector<DataPointPlasma>& Update::getCachedPlasmaData() {
     if (cachedDataPlasma.empty()) {
-        cachedDataPlasma = loadDataPlasma("plasma.txt");
+        cachedDataPlasma = loadDataPlasma("plasmaData.txt");
     }
     return cachedDataPlasma;
 }
     std::vector<double> Update::get_density_temperature(double *x) {
     std::vector<DataPointPlasma> data = getCachedPlasmaData();
-    auto interpolatedValues = interpolatePlasma(data, x[0], x[1]);
+    // check data
+    if (data.empty()) {
+        throw std::runtime_error("Plasma data is empty!");
+    }
 
-    std::vector<double> plasma = { interpolatedValues(0), interpolatedValues(1), 0 };
+    // auto interpolatedValues = interpolatePlasma(data, 2.52857, -0.3);
+        auto interpolatedValues = interpolatePlasma(data, x[0], x[1]);
+
+    double vflow_interp = interpolatedValues(0);
+    double ti_interp = interpolatedValues(1);
+    double te_interp = interpolatedValues(2);
+    double ni_interp = interpolatedValues(3);
+    double ne_interp = interpolatedValues(4);
+    std::vector<double> plasma = { ne_interp, te_interp, vflow_interp, ni_interp, ti_interp };
     return plasma;
 }
 
@@ -2225,7 +2258,6 @@ double Update::get_ionization_rates(double *x, int mass, int charge) {
 
     double neLog = log10(plasmaData[0]);
     double teLog = log10(plasmaData[1]);
-    // printf("neLog: %g, teLog: %g\n", plasmaData[0], plasmaData[1]);
 
     double rateResult = 0.0;
 
@@ -2304,7 +2336,6 @@ double Update::get_reflection_coefficient(double energy, double angle, int mass,
     return result;
 }
 
-
 double Update::get_sputtering_coefficient(double energy, double angle, int mass, int charge)
 {
     std::vector<DataPointReflectionSputtering> data = getCachedDataReflectionSputtering(mass, charge);
@@ -2330,5 +2361,335 @@ double Update::get_sputtering_coefficient(double energy, double angle, int mass,
     return result;
 }
 
+/* ----------------------------------------------------------------------
+   get electric potential for particle I from x,y,z fields
+------------------------------------------------------------------------- */
+std::vector<Point> Update::readPointsFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<Point> data;
+    std::string line;
+    std::getline(file, line);
+    Point point;
+    while (file >> point.id >> point.x >> point.y ) {
+        data.push_back(point);
+    }
+    return data;
+}
 
-// getCachedDataReflectionSputtering
+const std::vector<Point>& Update::getCachedSurfData() {
+    if (!isSurfDataInitialized || cachedSurfDataFilename != filename) {
+        CachedSurfData = readPointsFromFile(filename);
+        cachedSurfDataFilename = filename;
+        isSurfDataInitialized = true;
+    }
+    return CachedSurfData;
+}
+
+/* Calculate the distance between two points */
+  
+double Update::distance(const Point& p1, const Point& p2) {
+    return std::sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y));
+}
+
+Result Update::findClosestPoint(const Point& target, const std::vector<Point>& points) {
+    Result res;
+    res.distance = std::numeric_limits<double>::max();
+
+    for (const Point& point : points) {
+        double dist = distance(target, point);
+        if (dist < res.distance) {
+            res.distance = dist;
+            res.point = point;
+        }
+    }
+    return res;
+}
+
+Point Update::computeNormal(const Point& p1, const Point& p2) {
+    Point normal;
+    normal.x = p2.y - p1.y;
+    normal.y = -(p2.x - p1.x);
+    double norm = std::sqrt(normal.x * normal.x + normal.y * normal.y);
+    if(norm != 0.0) {
+        normal.x /= norm;
+        normal.y /= norm;
+    }
+    return normal;
+}
+
+
+double Update::getElectricPotential(double x, double y)  {
+    const auto& points = getCachedSurfData();
+    if (points.empty()) {
+        std::cerr << "No points were read from the file." << std::endl;
+        return 1;
+    }
+    Point target = {0, x, y};
+    const Result closest = findClosestPoint(target, points);
+    
+    // Get the plasma parameters
+    const auto& plasmaData = get_density_temperature(&target.x);
+    double debyeLength = 7.43 * std::sqrt(plasmaData[1] / (plasmaData[0] * 1e-6));
+    
+    // Early exit if the particle is far from the sheath
+    if (std::abs(closest.distance/debyeLength) > 50) {
+        return 0;
+    }
+
+    Point normal;
+    if (closest.point.id > 0 && closest.point.id < points.size() - 1) {
+        normal = computeNormal(points[closest.point.id - 1], points[closest.point.id + 1]);
+    } else if (closest.point.id == 0) {
+        normal = computeNormal(points[0], points[1]);
+    } else {
+        normal = computeNormal(points[points.size() - 2], points.back());
+    }
+    
+    double B[3];
+    get_magnetic_field(&target.x, B);
+    double Bmagnitude = std::sqrt(B[0] * B[0] + B[1] * B[1]);
+    double alpha = 2.0;
+    if(Bmagnitude != 0.0) {
+        // alpha = std::acos((normal.x * B[0] + normal.y * B[1]) / Bmagnitude) * 180 / M_PI;
+        // alpha = (alpha > 90) ? 180.0 - alpha : alpha;
+        alpha = 2.0; 
+    }
+
+    double Efield = potential_PIC(alpha, closest.distance / debyeLength) * kB * plasmaData[1] * eV2Kelvin / (protonCharge * debyeLength );
+    return Efield;
+}
+
+
+double Update::potential_PIC(double alpha, double minDistance) const {
+    const double t_width = domain->t_sheath;
+
+    const double C1_alpha = -0.00281407f * alpha - 2.31655435f;
+    const double C2_alpha = 0.00640402f * alpha + 0.01023915f;
+    return std::abs(C1_alpha * C2_alpha) * std::exp(-C2_alpha * std::abs(minDistance * t_width));
+}                                                                                                                 
+
+void Update::crossFieldDiffusion( double *xnew, double dt) {
+
+  // printf("before xnew: %g, %g, %g\n", xnew[0], xnew[1], xnew[2]);
+  const double D_perp = domain->t_D_perp;
+
+  double B[3];
+  get_magnetic_field(xnew, B);
+    // Normalize B-field
+    double Bnorm = std::sqrt(B[0]*B[0] + B[1]*B[1] + B[2]*B[2]);
+    double Bx = B[0] / Bnorm;
+    double By = B[1] / Bnorm;
+    double Bz = B[2] / Bnorm;
+
+    // Choose a direction perpendicular to B-field
+    double R1 = (std::abs(Bz) < 1e-10) ? 1.0 : 0.0;
+    double R2 = 0.0;
+    double R3 = (std::abs(Bz) < 1e-10) ? 0.0 : 1.0;
+
+    // Compute first perpendicular direction using cross product
+    double P1x = By * R3 - Bz * R2;
+    double P1y = Bz * R1 - Bx * R3;
+    double P1z = Bx * R2 - By * R1;
+
+    // Normalize P1
+    double P1norm = std::sqrt(P1x*P1x + P1y*P1y + P1z*P1z);
+    P1x /= P1norm;
+    P1y /= P1norm;
+    P1z /= P1norm;
+
+    // Compute second perpendicular direction using cross product of B and P1
+    double P2x = By * P1z - Bz * P1y;
+    double P2y = Bz * P1x - Bx * P1z;
+    double P2z = Bx * P1y - By * P1x;
+
+    // Generate random displacements
+    static std::random_device rd;  // Only initialize once
+    static std::mt19937 gen(rd());  // Only initialize once
+    std::normal_distribution<double> dist(0.0, std::sqrt(2 * D_perp * dt));
+    double delta_x = dist(gen);
+    double delta_y = dist(gen);
+
+    // Update position with anomalous diffusion
+    xnew[0] += P1x * delta_x + P2x * delta_y;
+    xnew[1] += P1y * delta_x + P2y * delta_y;
+    xnew[2] += P1z * delta_x + P2z * delta_y;
+
+    // printf("after xnew: %g, %g, %g\n", xnew[0], xnew[1], xnew[2]);
+}
+
+
+  // Set background parameters
+const double background_Z = 1.0; // Deuterium
+const double background_mass = 2.0; // Deuterium
+const double Q = 1.60217662e-19;
+const double EPS0 = 8.854187e-12;
+const double MI = 1.6737236e-27;
+const double ME = 9.10938356e-31;
+
+
+/* define background collisions */
+void Update::getSlowDownFrequencies(double& nu_friction, double& nu_deflection, 
+    double& nu_parallel, double& nu_energy, 
+    double *v, double charge, double amu, double te_eV, double density) {
+
+
+  const double ti_eV = te_eV;
+  const double vx = v[0];
+  const double vy = v[1];
+  const double vz = v[2];
+
+  const double flowVelocity[3]= {0.0, 0.0, 0.0};
+  const double relativeVelocity[3] = {vx - flowVelocity[0], vy - flowVelocity[1], vz - flowVelocity[2]};
+  const double velocityNorm = std::sqrt(relativeVelocity[0]*relativeVelocity[0] + 
+                                         relativeVelocity[1]*relativeVelocity[1] + 
+                                         relativeVelocity[2]*relativeVelocity[2]);
+
+  const double lam_d = std::sqrt(EPS0 * te_eV / (density * background_Z * background_Z * Q));
+  const double lam = 12.0 * M_PI * density * lam_d * lam_d * lam_d / charge;
+  const double gam_electron_background = 0.238762895 * Q * Q * std::log(lam) / (amu * amu);
+  const double gam_ion_background = 0.238762895 * Q * Q * background_Z * background_Z * std::log(lam) / (amu * amu);
+
+  const double a_ion = background_mass * MI / (2 * ti_eV * Q);
+  const double a_electron = ME / (2 * te_eV * Q);
+
+  const double xx = velocityNorm * velocityNorm * a_ion;
+  const double psi_prime = 2.0 * std::sqrt(xx/M_PI) * std::exp(-xx);
+  const double psi_psiprime = std::erf(std::sqrt(xx));
+  const double psi = psi_psiprime - psi_prime;
+
+  const double xx_e = velocityNorm * velocityNorm * a_electron;
+  const double psi_prime_e = 1.128379 * std::sqrt(xx_e);
+  const double psi_e = 0.75225278 * std::pow(xx_e,1.5);
+  const double psi_psiprime_e = psi_e + psi_prime_e;
+
+  const double nu_0_i = gam_electron_background * density / std::pow(velocityNorm, 3);
+  const double nu_0_e = gam_ion_background * density / std::pow(velocityNorm, 3);
+
+  nu_friction = (1 + amu / background_mass) * psi * nu_0_i;
+  nu_deflection = 2 * (psi_psiprime - psi / (2 * xx)) * nu_0_i;
+  nu_parallel = psi / xx * nu_0_i;
+  nu_energy = 2 * (amu / background_mass * psi - psi_prime) * nu_0_i;
+
+  if(te_eV <= 0.0 || density <= 0.0) {
+    nu_friction = 0.0;
+    nu_deflection = 0.0;
+    nu_parallel = 0.0;
+    nu_energy = 0.0;
+  }
+}
+
+void Update::getSlowDownDirections2(double parallel_direction[], double perp_direction1[], 
+    double perp_direction2[], double vx, double vy, double vz) {
+
+  double v = std::sqrt(vx * vx + vy * vy + vz * vz);
+  
+  // Handle the case where v == 0.0
+  if (v == 0.0) {
+    v = 1.0;
+    vz = 1.0;
+    vx = 0.0;
+    vy = 0.0;
+  }
+
+  double ez1 = vx / v;
+  double ez2 = vy / v;
+  double ez3 = vz / v;
+    
+  // Compute the first perpendicular direction
+  double ex1 = ez2;
+  double ex2 = -ez1;
+  double ex3 = 0.0;
+  
+  // Handle edge case for particles moving purely in z-direction
+  double exnorm = std::sqrt(ex1 * ex1 + ex2 * ex2);
+  if (std::abs(exnorm) < 1.0e-12) {
+    ex1 = -ez3;
+    ex2 = 0.0;
+    ex3 = ez1;
+  }
+
+  // Normalize ex
+  exnorm = std::sqrt(ex1 * ex1 + ex2 * ex2 + ex3 * ex3);
+  ex1 /= exnorm;
+  ex2 /= exnorm;
+  ex3 /= exnorm;
+  
+  // Compute the second perpendicular direction
+  double ey1 = ez2 * ex3 - ez3 * ex2;
+  double ey2 = ez3 * ex1 - ez1 * ex3;
+  double ey3 = ez1 * ex2 - ez2 * ex1;
+
+  // Populate output arrays
+  parallel_direction[0] = ez1; 
+  parallel_direction[1] = ez2;
+  parallel_direction[2] = ez3;
+  
+  perp_direction1[0] = ex1; 
+  perp_direction1[1] = ex2;
+  perp_direction1[2] = ex3;
+  
+  perp_direction2[0] = ey1; 
+  perp_direction2[1] = ey2;
+  perp_direction2[2] = ey3;
+}
+
+
+void Update::backgroundCollisions(double *x, double *v, double dt, double mass, double charge) {
+
+    // Get plasma data
+    double flowVelocity[3] = {0.0, 0.0, 0.0};
+
+    double t_flow_scale = domain->t_flow;
+    std::vector<double> plasmaData = get_density_temperature(x);
+    double density = plasmaData[0];
+    double ti_eV = plasmaData[1];
+    double vflow_parr = plasmaData[2] * t_flow_scale;
+    
+    // get magnetic field
+    double B[3];
+    get_magnetic_field(x, B);
+    double Bnorm = std::sqrt(B[0]*B[0] + B[1]*B[1] + B[2]*B[2]);
+
+    for(int i=0; i<3; i++) {
+        flowVelocity[i] = vflow_parr * (B[i] / Bnorm);
+    }
+
+    double relativeVelocity[3];
+    for(int i=0; i<3; i++) {
+        relativeVelocity[i] = v[i] - flowVelocity[i];
+    }
+    double velocityRelativeNorm = std::sqrt(std::inner_product(relativeVelocity, relativeVelocity+3, relativeVelocity, 0.0));
+
+    // Random number generation
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<double> distribution(0.0,1.0);
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    
+    double n1 = distribution(gen);
+    double n2 = distribution(gen);
+    double xsi = dist(gen);
+    
+    // getSlowDownFrequencies
+    double nu_friction, nu_deflection, nu_parallel, nu_energy;
+    getSlowDownFrequencies(nu_friction, nu_deflection, nu_parallel, nu_energy, v, charge, mass, ti_eV, density);
+
+    // getSlowDownDirections2
+    double parallel_direction[3], perp_direction1[3], perp_direction2[3];
+    getSlowDownDirections2(parallel_direction, perp_direction1, perp_direction2, v[0], v[1], v[2]);
+
+    double coeff_par = n1 * std::sqrt(2.0 * nu_parallel * dt);
+    double cosXsi = std::min(std::max(cos(2.0 * M_PI * xsi), -1.0), 1.0);
+    double coeff_perp1 = cosXsi * std::sqrt(nu_deflection * dt * 0.5);
+    double coeff_perp2 = sin(2.0 * M_PI * xsi) * std::sqrt(nu_deflection * dt * 0.5);
+    double nuEdt = std::min(std::max(nu_energy * dt, -1.0), 1.0);
+
+    for(int i=0; i<3; i++) {
+        double V_rel = velocityRelativeNorm * (1.0 - 0.5 * nuEdt * dt) * 
+                      (coeff_par * parallel_direction[i] + 
+                       std::abs(n2) * coeff_perp1 * perp_direction1[i] +
+                       std::abs(n2) * coeff_perp2 * perp_direction2[i]) -
+                      velocityRelativeNorm * dt * nu_friction * parallel_direction[i];
+        v[i] = V_rel + flowVelocity[i];
+    }
+}

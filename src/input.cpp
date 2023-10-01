@@ -666,6 +666,10 @@ int Input::execute_command()
   else if (!strcmp(command,"shell")) shell();
   else if (!strcmp(command,"variable")) variable_command();
 
+ else if (!strcmp(command,"t_sheath")) t_sheath();
+ else if (!strcmp(command,"t_D_perp")) t_D_perp();
+else if (!strcmp(command,"t_flow")) t_flow();
+
   else if (!strcmp(command,"boundary")) boundary();
   else if (!strcmp(command,"bound_modify")) bound_modify();
   else if (!strcmp(command,"collide")) collide_command();
@@ -1244,6 +1248,38 @@ void Input::collide_modify()
 void Input::compute()
 {
   modify->add_compute(narg,arg);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void Input::t_sheath()
+{
+  if (narg != 1) error->all(FLERR,"Illegal sheath command: expected a single float argument");
+  float sheathValue = atof(arg[0]);
+
+  if (sheathValue == 0.0) error->all(FLERR,"Illegal sheath value: not a valid float");
+  domain->t_sheath =  atof(arg[0]);
+}
+
+/**flow correction*/
+void Input::t_flow()
+{
+  if (narg != 1) error->all(FLERR,"Illegal flow command: expected a single float argument");
+  float flowValue = atof(arg[0]);
+
+  if (flowValue == 0.0) error->all(FLERR,"Illegal flow value: not a valid float");
+  domain->t_flow =  atof(arg[0]);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void Input::t_D_perp()
+{
+  if (narg != 1) error->all(FLERR,"Illegal D_perp command: expected a single float argument");
+  float D_perpValue = atof(arg[0]);
+
+  if (D_perpValue == 0.0) error->all(FLERR,"Illegal D_perp value: not a valid float");
+  domain->t_D_perp =  atof(arg[0]);
 }
 
 /* ---------------------------------------------------------------------- */

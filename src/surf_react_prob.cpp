@@ -154,12 +154,13 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
       v3[j] = ip->v[j];
       x3[j] = ip->x[j];
     }
+    printf("incident particles velocity = %g %g %g\n",v3[0],v3[1],v3[2]);
     std::vector<double> plasmaData = update->get_density_temperature(x3);
     double B[3];
     update->get_magnetic_field( x3, B);
     double ne = plasmaData[0];
     double te = plasmaData[1];
-    double sheathEnergy = 3.0 * te * charge_incident;
+    double sheathEnergy = 0; //3.0 * te * charge_incident;
     // get reflection coefficient
     double energy_incident = 0.5 * mass_incident * MathExtra::lensq3(v3) * joule2ev + sheathEnergy;
     // get sputtering coefficient
@@ -174,7 +175,7 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
     double react_prob_sputtering = sputtering_coefficient / (reflection_coefficient + sputtering_coefficient);
     
 
-     if (react_prob_reflection > random_prob) { 
+     if (react_prob_sputtering > random_prob) { 
       // printf("reflection\n");
       nsingle++;
       tally_single[list[i]]++;
@@ -189,6 +190,8 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
           memcpy(x,ip->x,3*sizeof(double));
           memcpy(v,ip->v,3*sizeof(double));
           Particle::OnePart *particles = particle->particles;
+          // print velocity
+          printf("v = %g %g %g\n",v[0],v[1],v[2]);
           int reallocflag =
             particle->add_particle(id,r->products[1],ip->icell,x,v,0.0,0.0);
           if (reallocflag) ip = particle->particles + (ip - particles);

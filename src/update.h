@@ -22,22 +22,40 @@
 
 namespace SPARTA_NS {
 
+struct Point {
+    int id;           // surface id
+    double x;
+    double y;
+};
+
+struct Result {
+    double distance;
+    Point point;
+};
+
+
 struct DataPoint {    // Added for representing the magnetic field data
     double r, z, y, br, bz, bt;
 };
 
-struct DataPointPlasma {    // Added for representing the magnetic field data
-    double r, z, ne, te;
-};
+struct DataPointPlasma {
+    double r, z, vflow, ti, te, ni, ne;
 
+    double getValue(int index) const {
+        switch(index) {
+            case 0: return vflow;
+            case 1: return ti;
+            case 2: return te;
+            case 3: return ni;
+            case 4: return ne;
+            default: return 0;
+        }
+    }
+};
 struct DataPointRate {    // Added for representing the magnetic field data
     double ne, te, rate;
 };
 
-struct PlasmaData {
-    double density;
-    double temperature;
-};
 
 struct DataPointReflectionSputtering {    
     double angle, energy, rpyld, spyld;
@@ -125,10 +143,12 @@ class Update : protected Pointers {
   const std::vector<DataPoint>& getCachedDataBfield();
 
 
-  // public methods
-
       std::vector<double> get_density_temperature(double *) ;
     std::vector<DataPointPlasma> cachedDataPlasma;       // To store the cached magnetic field data
+    // CachedSurfData
+    std::vector<Point> CachedSurfData;
+    bool isSurfDataInitialized = false;  // Add this flag
+
      std::vector<DataPointRate> cachedDataIonizationRates;
      std::vector<DataPointRate> cachedDataRecombRates;
      std::vector<DataPointReflectionSputtering> cachedDataSurfaceData;
@@ -136,13 +156,30 @@ class Update : protected Pointers {
     const std::vector<DataPointRate>& getCachedIonizationRates(int, int);
     const std::vector<DataPointRate>& getCachedRecombRates(int , int );
     const std::vector<DataPointReflectionSputtering>& getCachedDataReflectionSputtering(int, int);
+    const std::vector<Point>& getCachedSurfData();
 
     double  get_ionization_rates(double *, int , int );
     double get_recombination_rates(double *, int , int );
     void get_magnetic_field( double *, double *);
     double get_reflection_coefficient(double, double, int, int);
     double get_sputtering_coefficient(double, double, int, int);
+    double distance(const Point& , const Point& );
 
+    double getElectricPotential(double  , double );
+    double potential_PIC(double , double ) const;
+
+    // void Update::crossFieldDiffusion(const double (&B)[3], double (&xnew)[3], double D_perp, double dt);
+    void crossFieldDiffusion( double *, double );
+    void getSlowDownFrequencies(double& , double& , double& , double& , double *, double , double , double , double);
+    void getSlowDownDirections2(double [], double [], double [], double , double , double );
+    void backgroundCollisions(double *, double *, double, double, double);
+    // void Update::backgroundCollisions(double *v, double dt) {
+    // void Update::getSlowDownDirections2(double parallel_direction[], double perp_direction1[], 
+    // double perp_direction2[], double vx, double vy, double vz)
+
+    // Result findClosestDistance(const Point& , const std::vector<Point>& );
+    Result findClosestPoint(const Point& , const std::vector<Point>& );
+    Point  computeNormal(const Point& , const Point& );
 
   Update(class SPARTA *);
   ~Update();
@@ -159,7 +196,6 @@ class Update : protected Pointers {
  protected:
 
      std::vector<DataPoint> loadData(const std::string& filename); // Helper function to load the data from the file
-
 
   int me,nprocs;
   int maxmigrate;            // max # of particles in mlist
@@ -253,15 +289,18 @@ class Update : protected Pointers {
   //
 
   void pusher_boris(double *, double *, double *, double , double , double );
+  
 
    std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointRate> loadDataRate(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file
+    std::vector<Point> readPointsFromFile(const std::string& filename); // Helper function to load the data from the file
 
    std::string cachedFilename;  // <-- Add this line
    std::string cachedIonFilename;
    std::string cachedRecomFilename;
    std::string cachedSurfaceDataFilename;
+   std::string cachedSurfDataFilename;
 };
 }
 

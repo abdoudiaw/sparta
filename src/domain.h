@@ -23,6 +23,9 @@ namespace SPARTA_NS {
 class Domain : protected Pointers {
  public:
   int box_exist;                    // 0 = not yet created, 1 = exists
+  float t_sheath;
+  float t_D_perp;
+  float t_flow;
   int dimension;                    // 2,3
   int axisymmetric;                 // 1 for yes, 0 for no, only allowed in 2d
   int boundary_collision_check;  // flag for whether init() check is required

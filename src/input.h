@@ -84,6 +84,9 @@ class Input : protected Pointers {
   void collide_modify();
   void compute();
   void dimension();
+  void t_sheath();
+  void t_D_perp();
+  void t_flow();
   void dump();
   void dump_modify();
   void fix();
