@@ -1,5 +1,9 @@
 # ######### BEGIN TARGET_SPARTA ##########
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+
 # ######### START SETUP COMMANDS ##########
 # GLOB together all source files
 file(
@@ -7,6 +11,13 @@ file(
   LIST_DIRECTORIES false
   CONFIGURE_DEPENDS *.cpp *.hpp *.h)
 list(REMOVE_ITEM SPA_SRC_FILES "main.cpp")
+
+# Add the PyTorch include path
+#include_directories("/opt/homebrew/opt/pytorch/include")
+
+# If you need to link against PyTorch's libraries:
+#link_directories("/opt/homebrew/opt/pytorch/lib")
+
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include)
 
@@ -32,6 +43,8 @@ add_library(${TARGET_SPARTA_LIB} ${SPA_SRC_FILES})
 set_target_properties(
   ${TARGET_SPARTA_LIB} PROPERTIES VERSION ${SPARTA_BUILD_VER} SOVERSION
                                                               ${SPARTA_API_VER})
+                                                              
+                                                              
 target_include_directories(${TARGET_SPARTA_LIB} PRIVATE ${SPA_INCLUDE_DIRS})
 target_link_libraries(${TARGET_SPARTA_LIB} LINK_PUBLIC
                       ${TARGET_SPARTA_BUILD_TPLS})
@@ -56,6 +69,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_SPARTA_LIB_LINK}
 
 add_executable(${TARGET_SPARTA} main.cpp)
 target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB})
+#target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB} torch)
+
 add_custom_command(
   TARGET ${TARGET_SPARTA}
   POST_BUILD

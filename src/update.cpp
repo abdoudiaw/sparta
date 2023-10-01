@@ -44,6 +44,7 @@
 #include "random_knuth.h"
 #include <string>  
 #include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
+
 #include <random>
 #include <iostream>
 #include "math_const.h"
@@ -476,6 +477,67 @@ template < int DIM, int SURF, int OPT > void Update::move()
       int isp = ipart->ispecies;
       double mass = species[isp].mass;
       double charge = species[isp].charge * electron_charge;
+
+      // check for ionization and recombination
+
+    printf("species mass is %g\n", species[isp].mass);
+    printf("species charge is %g\n", species[isp].charge);
+    double react_prob_ioniziation =  get_ionization_rates(x, species[isp].mass / proton_mass, species[isp].charge, dt );
+    double react_prob_recombination = get_recombination_rates(x, species[isp].mass / proton_mass, species[isp].charge, dt );
+
+    printf("Ionization react_prob_ioniziation: %g\n", react_prob_ioniziation);
+    
+    printf("Recombination react_prob_recombination: %g\n", react_prob_recombination);
+    exit(0);
+    // probablity to compare to reaction probability
+
+    // double react_prob_ioniziation = 0.0;
+    // double react_prob_recombination = 0.0;
+    // double current_prob=0;
+
+    //     // Random number generation
+    // std::random_device rd;
+    // std::mt19937 gen(rd());
+    // std::normal_distribution<double> distribution(0.0,1.0);
+    // std::uniform_real_distribution<double> dist(0.0, 1.0);
+    
+    // double random_prob_ionization = distribution(gen);
+    // double random_prob_recombination =distribution(gen);
+
+
+    // double small_threshold = 1e-3; // You can adjust this value
+    // double dt_times_ionization = dt * ionization_rates;
+
+    // if (fabs(dt_times_ionization) < small_threshold) {
+    //     react_prob_ioniziation = dt_times_ionization;
+    // } else {
+    //     react_prob_ioniziation = 1.0 - exp(-dt_times_ionization);
+    // }
+
+    // double dt_times_recombination = dt * recombination_rates;
+    // if (fabs(dt_times_recombination) < small_threshold) {
+    //     react_prob_recombination = dt_times_recombination;
+    // } else {
+    //     react_prob_recombination = 1.0  - exp(-dt_times_recombination);
+    // }
+
+    // if (random_prob_ionization < react_prob_ioniziation) {
+    //     // ionization
+    //     printf("Ionization\n");
+    //     printf("Ionization rates: %g\n", ionization_rates);
+    //     printf("Ionization probability: %g\n", react_prob_ioniziation);
+    //     printf("Ionization random number: %g\n", random_prob_ionization);
+    // }
+    // if (random_prob_recombination < react_prob_recombination) {
+    //     // recombination
+    //     printf("Recombination\n");
+    //     printf("Recombination rates: %g\n", recombination_rates);
+    //     printf("Recombination probability: %g\n", react_prob_recombination);
+    //     printf("Recombination random number: %g\n", random_prob_recombination);
+    // }
+    exit(0);
+
+
       // get magnetic field at particle position
       double B[3];
    
@@ -2186,7 +2248,8 @@ const std::vector<DataPointPlasma>& Update::getCachedPlasmaData() {
 
 const std::vector<DataPointRate>& Update::getCachedIonizationRates(int mass, int charge) {
     std::string material;
-    // printf("looking for material with mass mass: %g\n", mass);
+    printf("looking for material with mass mass: %d\n", mass);
+    printf("looking for material with charge: %d\n", charge);
     if (mass == 184) {
         material = "tungsten";
     } else if (mass == 16) {
@@ -2196,6 +2259,8 @@ const std::vector<DataPointRate>& Update::getCachedIonizationRates(int mass, int
     }
 
     std::string filename = "rates/" + material + "_ionization." + std::to_string(charge) + ".txt";
+
+    printf(" ionization filename: %s\n", filename.c_str());
 
     // If the cache is empty or if the filename has changed (i.e., new mass or charge), reload data.
     if (cachedDataIonizationRates.empty() || filename != cachedIonFilename) {
@@ -2218,6 +2283,7 @@ const std::vector<DataPointRate>& Update::getCachedRecombRates(int mass, int cha
     }
 
     std::string filename = "rates/" + material + "_recombination." + std::to_string(charge) + ".txt";
+    printf(" recombination filename: %s\n", filename.c_str());
 
     // If the cache is empty or if the filename has changed (i.e., new mass or charge), reload data.
     if (cachedDataRecombRates.empty() || filename != cachedRecomFilename) {
@@ -2251,17 +2317,51 @@ const std::vector<DataPointReflectionSputtering>& Update::getCachedDataReflectio
     return cachedDataSurfaceData;
 }
 
-double Update::get_ionization_rates(double *x, int mass, int charge) {
+double Update::get_ionization_rates(double *x, int mass, int charge, double dt) {
     // Get temperature and density:
+    printf("mass: %d, charge: %d\n", mass, charge);
+
+    std::string material;
+    int max_charge; // This will store the maximum possible ionization state
+
+    if (mass == 184) {
+        material = "tungsten";
+        max_charge = 73; // Considering that the maximum ionization state for tungsten is W^74+
+    } else if (mass == 16) {
+        material = "oxygen";
+        max_charge = 7; // For oxygen, the maximum is 7 (considering 0 as neutral state)
+    } else {
+        throw std::runtime_error("Material does not exist in the DB!");
+    }
+
+    double react_prob_ioniziation = 0.0;
+
+    // Checking the charge boundary conditions
+    if (charge > max_charge) {
+        react_prob_ioniziation = 0.0;
+        return react_prob_ioniziation;
+    }
+    
     std::vector<double> plasmaData = get_density_temperature(x);
     std::vector<DataPointRate> data = getCachedIonizationRates(mass, charge);
 
     double neLog = log10(plasmaData[0]);
     double teLog = log10(plasmaData[1]);
 
+    double react_prob_recombination = 0.0;
+    double current_prob=0;
+
+    // Random number generation
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<double> distribution(0.0,1.0);
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    
+    double random_prob_ionization = distribution(gen);
+    double random_prob_recombination =distribution(gen);
+
+    double small_threshold = 1e-3; // You can adjust this value
     double rateResult = 0.0;
-
-
 
     for (size_t i = 1; i < data.size(); ++i) {
         if (neLog >= data[i-1].ne && neLog <= data[i].ne) {
@@ -2275,22 +2375,53 @@ double Update::get_ionization_rates(double *x, int mass, int charge) {
                     double rate2 = data[j-1].rate + beta * (data[j].rate - data[j-1].rate);
 
                     rateResult = rate1 + beta * (rate2 - rate1);
-                    return pow(10.0, rateResult) * plasmaData[0];
-                }
-            }
-        }
+                    // return pow(10.0, rateResult) * plasmaData[0];
+
+                  
+                  double dt_times_ionization = dt * pow(10.0, rateResult) * plasmaData[0];;
+
+                  if (fabs(dt_times_ionization) < small_threshold) {
+                      react_prob_ioniziation = dt_times_ionization;
+                  } else {
+                      react_prob_ioniziation = 1.0 - exp(-dt_times_ionization);
+                  }
+                              }
+                          }
+                      }
+                  return react_prob_ioniziation;
     }
-    return pow(10.0, rateResult) * plasmaData[0];
+    return react_prob_ioniziation;
 }
 
-double Update::get_recombination_rates(double *x, int mass, int charge) {
+double Update::get_recombination_rates(double *x, int mass, int charge, double dt) {
+    std::string material;
+    int max_charge; // This will store the maximum possible ionization state
+
+    if (mass == 184) {
+        material = "tungsten";
+        max_charge = 73; // W^74+ is the highest ionization state for tungsten
+    } else if (mass == 16) {
+        material = "oxygen";
+        max_charge = 7; // Considering 0 as neutral state for oxygen
+    } else {
+        throw std::runtime_error("Material does not exist in the DB!");
+    }
+
+    // If charge is neutral, recombination probability is 0.
+    if (charge <= 0) {
+        printf("particle is neutral no recombination\n");
+        return 0.0;
+    }
+
     // Get temperature and density:
     std::vector<double> plasmaData = get_density_temperature(x);
-    std::vector<DataPointRate> data = getCachedRecombRates(mass, charge);
-
     double neLog = log10(plasmaData[0]);
     double teLog = log10(plasmaData[1]);
+    printf("neLog: %g, teLog: %g\n", neLog, teLog);
+
+    std::vector<DataPointRate> data = getCachedRecombRates(mass, charge);
     double rateResult = 0.0;
+    double small_threshold = 1e-3; // Threshold for the small rate approximation
 
     for (size_t i = 1; i < data.size(); ++i) {
         if (neLog >= data[i-1].ne && neLog <= data[i].ne) {
@@ -2302,15 +2433,25 @@ double Update::get_recombination_rates(double *x, int mass, int charge) {
 
                     double rate1 = data[i-1].rate + alpha * (data[i].rate - data[i-1].rate);
                     double rate2 = data[j-1].rate + beta * (data[j].rate - data[j-1].rate);
-
                     rateResult = rate1 + beta * (rate2 - rate1);
-                    return pow(10.0, rateResult) * plasmaData[0];
+                    printf("rateResult: %g\n", rateResult);
+
+                    double rate_dt_product = dt * pow(10.0, rateResult) * plasmaData[0];
+                    printf("rate_dt_product: %g\n", rate_dt_product);
+
+                    if (fabs(rate_dt_product) < small_threshold) {
+                        return rate_dt_product;
+                    } else {
+                        return 1.0 - exp(-rate_dt_product);
+                    }
                 }
             }
         }
     }
-    return pow(10.0, rateResult) * plasmaData[0];
+
+    return 0.0; // Default return if conditions aren't met
 }
+
 
 double Update::get_reflection_coefficient(double energy, double angle, int mass, int charge)
 {

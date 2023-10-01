@@ -158,8 +158,8 @@ class Update : protected Pointers {
     const std::vector<DataPointReflectionSputtering>& getCachedDataReflectionSputtering(int, int);
     const std::vector<Point>& getCachedSurfData();
 
-    double  get_ionization_rates(double *, int , int );
-    double get_recombination_rates(double *, int , int );
+    double  get_ionization_rates(double *, int , int, double );
+    double get_recombination_rates(double *, int , int , double );
     void get_magnetic_field( double *, double *);
     double get_reflection_coefficient(double, double, int, int);
     double get_sputtering_coefficient(double, double, int, int);
