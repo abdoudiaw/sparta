@@ -12,11 +12,27 @@ file(
   CONFIGURE_DEPENDS *.cpp *.hpp *.h)
 list(REMOVE_ITEM SPA_SRC_FILES "main.cpp")
 
+# eigen
+
+# // #include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
+# include_directories("/opt/homebrew/opt/eigen/include/")
+
+# If you need to link against PyTorch's libraries:
+# link_directories("/opt/homebrew/opt/eigen/lib")
+
+
 # Add the PyTorch include path
-#include_directories("/opt/homebrew/opt/pytorch/include")
+#include_directories("//opt/homebrew/Cellar/netcdf/4.9.2_1/include")
 
 # If you need to link against PyTorch's libraries:
 #link_directories("/opt/homebrew/opt/pytorch/lib")
+
+
+# Add the netcdf include path
+include_directories("/opt/homebrew/Cellar/netcdf/4.9.2_1/include")
+
+# If you need to link against PyTorch's libraries:
+link_directories("/opt/homebrew/Cellar/netcdf/4.9.2_1/lib")
 
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include)
@@ -69,8 +85,9 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_SPARTA_LIB_LINK}
 
 add_executable(${TARGET_SPARTA} main.cpp)
 target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB})
-#target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB} torch)
-
+target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB})
+# target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB} netcdf netcdf_c++4)
+# 
 add_custom_command(
   TARGET ${TARGET_SPARTA}
   POST_BUILD

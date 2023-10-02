@@ -290,7 +290,6 @@ class Update : protected Pointers {
 
   void pusher_boris(double *, double *, double *, double , double , double );
   
-
    std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointRate> loadDataRate(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file

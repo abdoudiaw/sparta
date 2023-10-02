@@ -1,143 +1,124 @@
-// /* ----------------------------------------------------------------------
-//    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
-//    http://sparta.sandia.gov
-//    Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
-//    Sandia National Laboratories
+/* ----------------------------------------------------------------------
+   SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
+   http://sparta.sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
+   Sandia National Laboratories
 
-//    Copyright (2014) Sandia Corporation.  Under the terms of Contract
-//    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-//    certain rights in this software.  This software is distributed under
-//    the GNU General Public License.
+   Copyright (2014) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
 
-//    See the README file in the top-level SPARTA directory.
-// ------------------------------------------------------------------------- */
+   See the README file in the top-level SPARTA directory.
+------------------------------------------------------------------------- */
 
-// #include "math.h"
-// #include "string.h"
-// #include "stdlib.h"
-// #include "react_adas.h"
-// #include "particle.h"
-// #include "collide.h"
-// #include "random_knuth.h"
-// #include "error.h"
-// #include <vector>
-// #include <string>
-// #include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
-// #include <cmath> // Include this header
-// #include <stdexcept> // For std::runtime_error
-// #include "update.h"
-// using namespace SPARTA_NS;
+#include "math.h"
+#include "string.h"
+#include "stdlib.h"
+#include "react_adas.h"
+#include "particle.h"
+#include "collide.h"
+#include "random_knuth.h"
+#include "error.h"
+#include <vector>
+#include <string>
+#include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
+#include <cmath> // Include this header
+#include <stdexcept> // For std::runtime_error
+#include "update.h"
+using namespace SPARTA_NS;
 
-// enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
+enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 
-// /* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
 
-// ReactADAS::ReactADAS(SPARTA *sparta, int narg, char **arg) :
-//   ReactBird(sparta, narg, arg) {}
+ReactADAS::ReactADAS(SPARTA *sparta, int narg, char **arg) :
+  ReactBird(sparta, narg, arg) {}
 
-// /* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
 
-// void ReactADAS::init()
-// {
-//   ReactBird::init();
-// }
+void ReactADAS::init()
+{
+  ReactBird::init();
+}
 
-// /* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
 
-// int ReactADAS::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
-//                       double pre_etrans, double pre_erot, double pre_evib,
-//                       double &post_etotal, int &kspecies)
-// {
-//   double pre_etotal,ecc,e_excess;
-//   OneReaction *r;
-//   double *x;
+int ReactADAS::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
+                      double pre_etrans, double pre_erot, double pre_evib,
+                      double &post_etotal, int &kspecies)
+{
+  double pre_etotal,ecc,e_excess;
+  OneReaction *r;
+  double *x;
 
-//   Particle::Species *species = particle->species;
-//   int isp = ip->ispecies;
-//   int jsp = jp->ispecies;
+  Particle::Species *species = particle->species;
+  int isp = ip->ispecies;
+  int jsp = jp->ispecies;
 
-//   x = ip->x;
-//   double imass = species[isp].molwt ;
-//   double jmass = species[jsp].molwt;
-//   double icharge = species[isp].charge;
-//   double jcharge = species[jsp].charge;
+  x = ip->x;
+  double imass = species[isp].molwt ;
+  double jmass = species[jsp].molwt;
+  double icharge = species[isp].charge;
+  double jcharge = species[jsp].charge;
 
-//   double ionization_rates =  get_ionization_rates(x, imass, icharge);
-//   double recombination_rates = get_recombination_rates(x, imass, icharge);
+  double dt = update->dt;
+  double react_prob_ioniziation =  update->get_ionization_rates(x, imass, icharge, dt );
+  double react_prob_recombination = update->get_recombination_rates(x, imass, icharge, dt );
 
-//   // probablity to compare to reaction probability
 
-//   double react_prob_ioniziation = 0.0;
-//   double react_prob_recombination = 0.0;
-//   double current_prob=0;
-//   double random_prob = random->uniform();
-//   double dt = update->dt;
+  // probablity to compare to reaction probability
+  double current_prob=0;
+  double random_prob = random->uniform();
 
-//   double small_threshold = 1e-3; // You can adjust this value
-//   double dt_times_ionization = dt * ionization_rates;
+  int n = reactions[isp][jsp].n;
+  if (n == 0) return 0;
+  int *list = reactions[isp][jsp].list;
+  // loop over possible reactions for these 2 species
+  for (int i = 0; i < n; i++) {
+    r = &rlist[list[i]];
+    printf(" looping over possible reactions for these 2 species %i %s\n", i, r->type);
+    switch (r->type) {
+    case IONIZATION:
+      {
+        current_prob = react_prob_ioniziation;
+        break;
+      }
+    case RECOMBINATION:
+      {
+        current_prob = react_prob_recombination;
+        break;
+      }
+    default:
+      error->one(FLERR,"Unknown outcome in reaction");
+      break;
+    }
+    if (current_prob > random_prob) {
+      tally_reactions[list[i]]++;
+      ip->ispecies = r->products[0];
+    printf("ionization %g %g\n", react_prob_ioniziation, react_prob_recombination);
+      switch (r->type) {
+      case IONIZATION:
+        {
+        printf("ionization %g %g\n", react_prob_ioniziation, react_prob_recombination);
+          jp->ispecies = r->products[0];
+          break;
+        }
+      case RECOMBINATION:
+        {
+          jp->ispecies = -1;
+          break;
+        }
+      }
 
-//   if (fabs(dt_times_ionization) < small_threshold) {
-//       react_prob_ioniziation = dt_times_ionization;
-//   } else {
-//       react_prob_ioniziation = 1.0 - exp(-dt_times_ionization);
-//   }
+      if (r->nproduct > 2) kspecies = r->products[2];
+      else kspecies = -1;
 
-//   double dt_times_recombination = dt * recombination_rates;
-//   if (fabs(dt_times_recombination) < small_threshold) {
-//       react_prob_recombination = dt_times_recombination;
-//   } else {
-//       react_prob_recombination = 1.0  - exp(-dt_times_recombination);
-//   }
-
-//   int n = reactions[isp][jsp].n;
-//   if (n == 0) return 0;
-//   int *list = reactions[isp][jsp].list;
-//   // loop over possible reactions for these 2 species
-//   for (int i = 0; i < n; i++) {
-//     r = &rlist[list[i]];
-//     printf(" looping over possible reactions for these 2 species %i %s\n", i, r->type);
-//     printf("ionization %g %g\n", react_prob_ioniziation, react_prob_recombination);
-//     switch (r->type) {
-//     case IONIZATION:
-//       {
-//         current_prob = react_prob_ioniziation;
-//         break;
-//       }
-//     case RECOMBINATION:
-//       {
-//         current_prob = react_prob_recombination;
-//         break;
-//       }
-//     default:
-//       error->one(FLERR,"Unknown outcome in reaction");
-//       break;
-//     }
-//     if (current_prob > random_prob) {
-//       tally_reactions[list[i]]++;
-//       ip->ispecies = r->products[0];
-
-//       switch (r->type) {
-//       case IONIZATION:
-//         {
-      
-//           jp->ispecies = r->products[1];
-//           break;
-//         }
-//       case RECOMBINATION:
-//         {
-//           jp->ispecies = -1;
-//           break;
-//         }
-//       }
-
-//       if (r->nproduct > 2) kspecies = r->products[2];
-//       else kspecies = -1;
-
-//       return 1;
-//     }
-//   }
-//   return 0;
-// }
+      return 1;
+    }
+  }
+  return 0;
+}
 
 
 

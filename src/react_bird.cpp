@@ -235,6 +235,7 @@ void ReactBird::init()
     double omega = collide->extract(isp,jsp,"omega");
     double tref = collide->extract(isp,jsp,"tref");
 
+
     // double pre_ave_vibdof = (species[isp].vibdof + species[jsp].vibdof)/2.0;
     double mr = species[isp].mass * species[jsp].mass /
         (species[isp].mass + species[jsp].mass);
@@ -290,7 +291,6 @@ void ReactBird::init()
       r->coeff[6] = momega;
     }
   }
-
   // set recombflag = 0/1 if any recombination reactions are defined & active
   // check for user disabling them is at top of this method
 
@@ -301,7 +301,6 @@ void ReactBird::init()
   }
 
   if (!recombflag) return;
-
   // count how many IJ pairs have a recombination reaction
   // allocate sp2recomb_ij = contiguous list of reactions
   //   for all species for each IJ pair that has a recombination reaction
@@ -405,6 +404,7 @@ void ReactBird::init()
         }
       }
     }
+  printf("Finished initializing bird!\n");
 }
 
 /* ----------------------------------------------------------------------
@@ -477,23 +477,40 @@ void ReactBird::ambi_check()
     // ionization with 3 products must match this
     // I: A + e -> A+ + e + e
 
-    else if (r->type == IONIZATION && r->nproduct == 3) {
-      if (r->nreactant == 2 && r->nproduct == 3) {
-        if (ions[r->reactants[0]] == 0 && r->reactants[1] == especies &&
-            ions[r->products[0]] == 1 && r->products[1] == especies &&
-            r->products[2] == especies) flag = 0;
+    // else if (r->type == IONIZATION && r->nproduct == 3) {
+    //   if (r->nreactant == 2 && r->nproduct == 3) {
+    //     if (ions[r->reactants[0]] == 0 && r->reactants[1] == especies &&
+    //         ions[r->products[0]] == 1 && r->products[1] == especies &&
+    //         r->products[2] == especies) flag = 0;
+    //   }
+    // }
+
+    // // ionization with 2 products must match this
+    // // I: A + B -> AB+ + e
+
+    // else if (r->type == IONIZATION && r->nproduct == 2) {
+    //   if (r->nreactant == 2 && r->nproduct == 2) {
+    //     if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 0 &&
+    //         ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
+    //   }
+    // }
+
+    // else if (r->type == IONIZATION && r->nproduct == 1) {
+    //   if (r->nreactant == 2 && r->nproduct == 1) {
+    //     if (ions[r->reactants[0]] == 0 &&
+    //         ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
+    //   }
+    // }
+    // Ionization with one reactant and one product
+    else if (r->type == IONIZATION && r->nproduct == 1) {
+      if (r->nreactant == 1) {
+        if (ions[r->reactants[0]] == 0 && r->reactants[0] == especies &&
+            ions[r->products[0]] == 1 && r->products[0] == especies) {
+          flag = 0;
+        }
       }
     }
 
-    // ionization with 2 products must match this
-    // I: A + B -> AB+ + e
-
-    else if (r->type == IONIZATION && r->nproduct == 2) {
-      if (r->nreactant == 2 && r->nproduct == 2) {
-        if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 0 &&
-            ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
-      }
-    }
 
     // exchange must match one of these
     // E: AB+ + e -> A + B
@@ -676,7 +693,8 @@ void ReactBird::readfile(char *fname)
         error->all(FLERR,"Invalid exchange reaction");
       }
     } else if (r->type == IONIZATION) {
-      if (r->nreactant != 2 || (r->nproduct != 2 && r->nproduct != 3)) {
+      printf("IONIZATION\n");
+      if (r->nreactant != 1 || (r->nproduct != 1 )) {
         print_reaction(copy1,copy2);
         error->all(FLERR,"Invalid ionization reaction");
       }
@@ -819,6 +837,7 @@ void ReactBird::print_reaction(char *line1, char *line2)
 
 void ReactBird::print_reaction(OneReaction *r)
 {
+  printf(" printing reaction\n");
   if (comm->me) return;
   printf("Bad reaction:\n");
 
@@ -827,6 +846,7 @@ void ReactBird::print_reaction(OneReaction *r)
   else if (r->type == EXCHANGE) type = 'E';
   else if (r->type == IONIZATION) type = 'I';
   else if (r->type == RECOMBINATION) type = 'R';
+ 
 
   char style;
   if (r->style == ARRHENIUS) style = 'A';
