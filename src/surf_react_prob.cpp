@@ -154,7 +154,7 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
       v3[j] = ip->v[j];
       x3[j] = ip->x[j];
     }
-    printf("incident particles velocity = %g %g %g\n",v3[0],v3[1],v3[2]);
+    // printf("incident particles velocity = %g %g %g\n",v3[0],v3[1],v3[2]);
     std::vector<double> plasmaData = update->get_density_temperature(x3);
     double B[3];
     update->get_magnetic_field( x3, B);
@@ -163,18 +163,27 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
     double sheathEnergy = 0; //3.0 * te * charge_incident;
     // get reflection coefficient
     double energy_incident = 0.5 * mass_incident * MathExtra::lensq3(v3) * joule2ev + sheathEnergy;
+      // printf("energy_incident %g\n", energy_incident);
     // get sputtering coefficient
     double angle_max = 2.0;
     double angle_min = 0.0;
     double angle_degrees = angle_min + (random->uniform() * (angle_max - angle_min));
 
+    //print energy angle and charge
+    // printf("energy angle charge %g %g %g %g\n", energy_incident, angle_degrees,  mass_incident / mproton, charge_incident);
     double reflection_coefficient = update->get_reflection_coefficient(energy_incident,angle_degrees, mass_incident / mproton, charge_incident );
     double sputtering_coefficient = update->get_sputtering_coefficient(energy_incident,angle_degrees, mass_incident / mproton, charge_incident );
 
-    double react_prob_reflection = reflection_coefficient / (reflection_coefficient + sputtering_coefficient);
-    double react_prob_sputtering = sputtering_coefficient / (reflection_coefficient + sputtering_coefficient);
-    
+    double total_coefficient = reflection_coefficient + sputtering_coefficient;
+    double react_prob_reflection = reflection_coefficient / total_coefficient;
+    double react_prob_sputtering = sputtering_coefficient / total_coefficient;
 
+    if (total_coefficient  <=0){
+        // remove particle
+        ip = NULL;
+        return 0;
+    }
+    else{    
      if (react_prob_sputtering > random_prob) { 
       // printf("reflection\n");
       nsingle++;
@@ -184,14 +193,11 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
         {
           double x[3],v[3];
           ip->ispecies = r->products[0];
-          printf("dissociation\n");
-          printf("ip->ispecies = %d\n",ip->ispecies);
+
           int id = MAXSMALLINT*random->uniform();
           memcpy(x,ip->x,3*sizeof(double));
           memcpy(v,ip->v,3*sizeof(double));
-          Particle::OnePart *particles = particle->particles;
-          // print velocity
-          printf("v = %g %g %g\n",v[0],v[1],v[2]);
+          Particle::OnePart *particles = particle->particles;;
           int reallocflag =
             particle->add_particle(id,r->products[1],ip->icell,x,v,0.0,0.0);
           if (reallocflag) ip = particle->particles + (ip - particles);
@@ -201,6 +207,9 @@ int SurfReactProb::react(Particle::OnePart *&ip, int, double *,
       }
     }
   }
+    }
+
+    printf("Done in SurfReactProb!");
   return 0;
 }
 

@@ -572,7 +572,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
         if (perturbflag)
           (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
       } else if (pflag == PENTRY) {
-        printf("Advecting pflag == PENTRY particle %d\n", i);
+//        printf("Advecting pflag == PENTRY particle %d\n", i);
         icell = particles[i].icell;
         if (cells[icell].nsplit > 1) {
           if (DIM == 3 && SURF) icell = split3d(icell,x);
@@ -2436,6 +2436,7 @@ double Update::get_recombination_rates(double *x, int mass, int charge, double d
 
 double Update::get_reflection_coefficient(double energy, double angle, int mass, int charge)
 {
+    printf("inside update ref %g %g %d %d\n", energy, angle, mass, charge);
     std::vector<DataPointReflectionSputtering> data = getCachedDataReflectionSputtering(mass, charge);
     double result = 0.0;
     for (size_t i = 1; i < data.size(); ++i) {
@@ -2450,11 +2451,13 @@ double Update::get_reflection_coefficient(double energy, double angle, int mass,
                     double rpyld2 = data[j-1].rpyld + beta * (data[j].rpyld - data[j-1].rpyld);
 
                     result = rpyld1 + beta * (rpyld2 - rpyld1);
+                    printf(" R result %g\n", result);
                     return result;
                 }
             }
         }
     }
+    printf("R result %g\n", result);
     return result;
 }
 
