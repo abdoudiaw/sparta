@@ -2412,7 +2412,7 @@ double Update::get_recombination_rates(double *x, int mass, int charge, double d
         printf("particle is neutral no recombination\n");
         return 0.0;
     }
-
+    else { 
     // Get temperature and density:
     std::vector<double> plasmaData = get_density_temperature(x);
     double neLog = log10(plasmaData[0]);
@@ -2448,7 +2448,7 @@ double Update::get_recombination_rates(double *x, int mass, int charge, double d
             }
         }
     }
-
+    }
     return 0.0; // Default return if conditions aren't met
 }
 
