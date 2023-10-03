@@ -168,14 +168,10 @@ class Update : protected Pointers {
     double getElectricPotential(double  , double );
     double potential_PIC(double , double ) const;
 
-    // void Update::crossFieldDiffusion(const double (&B)[3], double (&xnew)[3], double D_perp, double dt);
     void crossFieldDiffusion( double *, double );
     void getSlowDownFrequencies(double& , double& , double& , double& , double *, double , double , double , double);
     void getSlowDownDirections2(double [], double [], double [], double , double , double );
     void backgroundCollisions(double *, double *, double, double, double);
-    // void Update::backgroundCollisions(double *v, double dt) {
-    // void Update::getSlowDownDirections2(double parallel_direction[], double perp_direction1[], 
-    // double perp_direction2[], double vx, double vy, double vz)
 
     // Result findClosestDistance(const Point& , const std::vector<Point>& );
     Result findClosestPoint(const Point& , const std::vector<Point>& );
@@ -290,6 +286,7 @@ class Update : protected Pointers {
 
   void pusher_boris(double *, double *, double *, double , double , double );
   
+
    std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointRate> loadDataRate(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file
