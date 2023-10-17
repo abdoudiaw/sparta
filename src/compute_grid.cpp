@@ -29,12 +29,12 @@ using namespace SPARTA_NS;
 
 enum{NUM,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
      U,V,W,USQ,VSQ,WSQ,KE,TEMPERATURE,EROT,TROT,EVIB,TVIB,
-     PXRHO,PYRHO,PZRHO,KERHO};
+     PXRHO,PYRHO,PZRHO,KERHO, WEIGHT};
 
 // internal accumulators
 
 enum{COUNT,MASSSUM,MVX,MVY,MVZ,MVXSQ,MVYSQ,MVZSQ,MVSQ,
-     ENGROT,ENGVIB,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,LASTSIZE};
+     ENGROT,ENGVIB,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,LASTSIZE,MWEIGHT};
 
 // max # of quantities to accumulate for any user value
 
@@ -153,7 +153,12 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
     } else if (strcmp(arg[iarg],"kerho") == 0) {
       value[ivalue] = KERHO;
       set_map(ivalue,MVSQ);
-    } else error->all(FLERR,"Illegal compute grid command");
+    } 
+else if (strcmp(arg[iarg],"weight") == 0) {
+      value[ivalue] = WEIGHT;
+      set_map(ivalue,MWEIGHT);
+    }
+    else error->all(FLERR,"Illegal compute grid command");
 
     ivalue++;
     iarg++;
@@ -554,6 +559,29 @@ void ComputeGrid::post_process_grid(int index, int nsample,
       }
       break;
     }
+    // add weight for each grid cell
+    case WEIGHT:
+    {
+      double wt;
+      double fnum = update->fnum;
+      Grid::ChildInfo *cinfo = grid->cinfo;
+
+      double norm;
+      int weight = emap[0];
+      for (int icell = lo; icell < hi; icell++) {
+        norm = cinfo[icell].volume;
+        // printf("norm: %g\n", norm);
+        if (norm == 0.0) vec[k] = 0.0;
+        else {
+          wt = fnum * cinfo[icell].weight / norm;
+          vec[k] = wt; //* etally[icell][weight] / nsample;
+          // printf("etally: %g\n", etally[icell][weight]);
+        }
+        k += nstride;
+      }
+      break;
+    }
+
   }
 }
 

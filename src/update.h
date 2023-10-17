@@ -19,8 +19,70 @@
 #include "pointers.h"
 #include <vector>
 #include <string>
+#include <H5Cpp.h>
+#include <map>
+#include <tuple>
+
+#include <fstream> // for std::ifstream
+#include <iostream> // for std::cerr and std::endl
+
+using namespace std;
 
 namespace SPARTA_NS {
+
+struct PointRZ {
+    float x;
+    float z;
+
+        PointRZ(float r_val, float z_val) : x(r_val), z(z_val) {}
+};
+
+struct DataPoint2 {
+    double center_rr, center_zz, ne, te, ti, vflow, br, bz, bt;
+};
+
+// Define a simple Polygon structure with a containment check
+struct Polygon {
+    std::vector<PointRZ> vertices;
+
+    bool contains(const PointRZ& PointRZ) const {
+        bool inside = false;
+        int j = vertices.size() - 1;
+
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            if ((vertices[i].z > PointRZ.z) != (vertices[j].z > PointRZ.z) &&
+                (PointRZ.x < (vertices[j].x - vertices[i].x) * (PointRZ.z - vertices[i].z) / (vertices[j].z - vertices[i].z) + vertices[i].x)) {
+                inside = !inside;
+            }
+            j = i;
+        }
+
+        return inside;
+    }
+};
+
+struct PlasmaData2 {
+    double center_rr;
+    double center_zz;
+    double ne;
+    double te;
+    double ti;
+    double vflow;
+    double br;
+    double bz;
+    double bt;
+};
+
+struct PlasmaData {
+    std::vector<std::vector<float>> dens_e, temp_e, dens_i, temp_i, parr_flow, b_r, b_z, b_phi;
+    // r, z are 1D arrays
+    std::vector<float> r, z;
+};
+
+
+struct PlasmaParams {
+    double dens_e, temp_e, dens_i, temp_i, parr_flow, b_r, b_z, b_phi;
+};
 
 struct Point {
     int id;           // surface id
@@ -33,10 +95,10 @@ struct Result {
     Point point;
 };
 
-
 struct DataPoint {    // Added for representing the magnetic field data
     double r, z, y, br, bz, bt;
 };
+
 
 struct DataPointPlasma {
     double r, z, vflow, ti, te, ni, ne;
@@ -56,11 +118,9 @@ struct DataPointRate {    // Added for representing the magnetic field data
     double ne, te, rate;
 };
 
-
 struct DataPointReflectionSputtering {    
     double angle, energy, rpyld, spyld;
 };
-
 
 class Update : protected Pointers {
  public:
@@ -138,44 +198,89 @@ class Update : protected Pointers {
   class Compute **blist_active;   // list of active boundary Computes this step
 
 
-// Caching mechanism additions:
-  std::vector<DataPoint> CachedDataBfield;       // To store the cached magnetic field data
-  const std::vector<DataPoint>& getCachedDataBfield();
+  // Caching mechanism additions:
+  mutable std::vector<Point> CachedSurfData; // Marked mutable since we modify it in a const function.
+  mutable std::string cachedSurfDataFilename; // Same reason as above.
+  mutable bool isSurfDataInitialized = false; // Same reason as above.
+
+  mutable std::vector<Point> cachedPoints;
+  mutable bool pointsCached = false;
 
 
-      std::vector<double> get_density_temperature(double *) ;
-    std::vector<DataPointPlasma> cachedDataPlasma;       // To store the cached magnetic field data
-    // CachedSurfData
-    std::vector<Point> CachedSurfData;
-    bool isSurfDataInitialized = false;  // Add this flag
+  struct pair_hash {
+    std::size_t operator() (const std::pair<double, double>& p) const {
+        auto h1 = std::hash<double>{}(p.first); 
+        auto h2 = std::hash<double>{}(p.second); 
+        return h1 ^ h2;
+    }
+};
+  struct VectorHash {
+        size_t operator()(const std::array<double, 3>& vec) const {
+            // Hash the values in xc to produce a unique key
+            return std::hash<double>()(vec[0]) ^ std::hash<double>()(vec[1]) ^ std::hash<double>()(vec[2]);
+        }
+    };
 
-     std::vector<DataPointRate> cachedDataIonizationRates;
-     std::vector<DataPointRate> cachedDataRecombRates;
-     std::vector<DataPointReflectionSputtering> cachedDataSurfaceData;
-    const std::vector<DataPointPlasma>& getCachedPlasmaData();
-    const std::vector<DataPointRate>& getCachedIonizationRates(int, int);
-    const std::vector<DataPointRate>& getCachedRecombRates(int , int );
+struct ArrayHash {
+    std::size_t operator()(const std::array<double, 3>& arr) const {
+        std::hash<double> hashFn;
+        std::size_t h0 = hashFn(arr[0]);
+        std::size_t h1 = hashFn(arr[1]);
+        std::size_t h2 = hashFn(arr[2]);
+        return h0 ^ (h1 << 1) ^ (h2 << 2); // Just one possible combination
+    }
+};
+
+
+    mutable std::unordered_map<std::array<double, 3>, double, VectorHash> potentialCache;
+// std::unordered_map<std::array<double, 3>, std::array<double, 3>> EfieldCache;
+// std::unordered_map<std::array<double, 3>, std::array<double, 3>, ArrayHash> EfieldCache;
+mutable std::unordered_map<std::array<double, 3>, std::array<double, 3>, ArrayHash> EfieldCache;
+
+
+    mutable std::unordered_map<std::pair<double, double>, double, pair_hash> electricPotentialCache;
+    std::map<std::pair<float, float>, PlasmaParams> plasma_cache;
+    std::map<std::string, PlasmaData> plasmaDataCache;
+vector<DataPoint2> ReadAndCacheData(const string& filename);
+
+    PlasmaData readPlasmaData(const std::string& filePath);
+    
+    PlasmaParams interpolatePlasmaData(double r_val, double z_val);
+
+DataPoint2 LinearInterpolate2(const DataPoint2& p1, const DataPoint2& p2, double t);
+
+PlasmaParams interpolate(const PlasmaData2& lower, const PlasmaData2& upper, double alpha);
+
     const std::vector<DataPointReflectionSputtering>& getCachedDataReflectionSputtering(int, int);
-    const std::vector<Point>& getCachedSurfData();
 
-    double  get_ionization_rates(double *, int , int, double );
-    double get_recombination_rates(double *, int , int , double );
-    void get_magnetic_field( double *, double *);
-    double get_reflection_coefficient(double, double, int, int);
-    double get_sputtering_coefficient(double, double, int, int);
-    double distance(const Point& , const Point& );
+    // double interp2dCombined(double x, double y, double z, int nx, int nz,
+    // float* gridx, float* gridz, float* data);
 
-    double getElectricPotential(double  , double );
-    double potential_PIC(double , double ) const;
+    double interp2dCombined(double x, double y, double z, int nx, int nz,
+    const float* gridx, const float* gridz, const float* data);
 
-    void crossFieldDiffusion( double *, double );
-    void getSlowDownFrequencies(double& , double& , double& , double& , double *, double , double , double , double);
+
+
+
+void getNeighboringPoints(const Point& closestPoint, Point& previousPoint, Point& nextPoint, const std::vector<Point>& points) const;
+
+    // double potential_brooks(double , double , double , double , double, double ) const ;
+    // double potential_brooks(double minDistance, double alpha, PlasmaParams params) const;
+    // double potential_brooks(double *xc, double minDistance, double alpha, const PlasmaParams params) const ;
+// double potential_brooks(double *xc, double minDistance, double alpha, const PlasmaParams params) const;
+// std::array<double, 3> potential_brooks(double *xc, const PlasmaParams params);
+std::array<double, 3> potential_brooks(double *xc, const PlasmaParams params) const;
+
+    double potential_PIC(double , double  ) const;
+    // double getElectricPotential(double  , double , double, double, PlasmaParams ) const;
+    std::pair<double, double> getElectricPotential(double x, double y, double charge, double mass, PlasmaParams params) const;
+
+    void crossFieldDiffusion( double *, double *, double , double * );
+    void getSlowDownFrequencies(double& , double& , double& , double& , double *, double , double, double , double , double);
     void getSlowDownDirections2(double [], double [], double [], double , double , double );
-    void backgroundCollisions(double *, double *, double, double, double);
-
-    // Result findClosestDistance(const Point& , const std::vector<Point>& );
-    Result findClosestPoint(const Point& , const std::vector<Point>& );
-    Point  computeNormal(const Point& , const Point& );
+    void backgroundCollisions(double *, double *, double, double, double, PlasmaParams );
+//   double getSoledgeData(float, float);
+//   PlasmaParams getSoledgeData(double r_val, double z_val) const ;
 
   Update(class SPARTA *);
   ~Update();
@@ -189,9 +294,29 @@ class Update : protected Pointers {
   int split3d(int, double *);
   int split2d(int, double *);
 
+
  protected:
 
-     std::vector<DataPoint> loadData(const std::string& filename); // Helper function to load the data from the file
+
+  void cachePointsFromFile() const {
+          if (!pointsCached) {
+              static const std::string filename = "lim.txt";
+              std::ifstream file(filename);
+              if (!file) {
+                  std::cerr << "Failed to open the file: " << filename << std::endl;
+                  return;
+              }
+              Point point;
+              while (file >> point.id >> point.x >> point.y) {
+                  cachedPoints.push_back(point);
+              }
+              pointsCached = true;
+          }
+      }
+
+      double squaredDistance(const Point& p1, const Point& p2) const {
+          return (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y);
+      }
 
   int me,nprocs;
   int maxmigrate;            // max # of particles in mlist
@@ -284,19 +409,17 @@ class Update : protected Pointers {
 
   //
 
-  void pusher_boris(double *, double *, double *, double , double , double );
-  
+//   void pusher_boris3D(double *, double *, double *, double *, double , double , double , PlasmaParams);
+//   void pusher_boris3D(double *xc, double *x, double *v, double *xnew, double charge, double mass, double dt, PlasmaParams params,  double *E, double *B);
+    void pusher_boris2D(double *, double *, double *, double *, double , double , double, double *, double *);
 
-   std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
-   std::vector<DataPointRate> loadDataRate(const std::string& filename); // Helper function to load the data from the file
    std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file
-    std::vector<Point> readPointsFromFile(const std::string& filename); // Helper function to load the data from the file
 
    std::string cachedFilename;  // <-- Add this line
    std::string cachedIonFilename;
    std::string cachedRecomFilename;
    std::string cachedSurfaceDataFilename;
-   std::string cachedSurfDataFilename;
+  //  std::string cachedSurfDataFilename;
 };
 }
 

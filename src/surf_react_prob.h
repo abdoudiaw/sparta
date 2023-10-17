@@ -22,9 +22,46 @@ SurfReactStyle(prob,SurfReactProb)
 #define SPARTA_SURF_REACT_PROB_H
 
 #include "surf_react.h"
+#include <H5Cpp.h>
+#include <map>
+#include <tuple>
+
+#include <fstream> // for std::ifstream
+#include <iostream> // for std::cerr and std::endl
+
 
 
 namespace SPARTA_NS {
+
+struct SurfaceData {
+    std::vector<float> energy;
+    std::vector<float> angle;
+    std::vector<std::vector<float>> rfyld;
+    std::vector<std::vector<float>> spyld;
+};
+
+struct SurfaceDataParams{
+    double rfyld, spyld;
+};
+
+struct pair_hash {
+    template <class T1, class T2>
+    std::size_t operator () (const std::pair<T1,T2>& p) const {
+        auto h1 = std::hash<T1>{}(p.first); 
+        auto h2 = std::hash<T2>{}(p.second); 
+        return h1 ^ h2;  
+    }
+};
+struct tuple_hash {
+    template <class T1, class T2, class T3>
+    std::size_t operator() (const std::tuple<T1, T2, T3>& t) const {
+        size_t hash1 = std::hash<T1>{}(std::get<0>(t));
+        size_t hash2 = std::hash<T2>{}(std::get<1>(t));
+        size_t hash3 = std::hash<T3>{}(std::get<2>(t));
+
+        return hash1 ^ hash2 ^ (hash3 << 1);  // Just an example of combining the hashes
+    }
+};
 
 
 class SurfReactProb : public SurfReact {
@@ -53,6 +90,12 @@ class SurfReactProb : public SurfReact {
   };
 
  protected:
+
+std::unordered_map<std::string, SurfaceData> surfaceDataCache; // For reading data from the file.
+// std::unordered_map<std::pair<double, double, double >, SurfaceDataParams, pair_hash> interpolatedDataCache; // For interpolated data.
+std::unordered_map<std::tuple<double, double, double>, SurfaceDataParams, tuple_hash> interpolatedDataCache;
+
+
   class RanKnuth *random;     // RNG for reaction probabilities
 
   OneReaction *rlist;              // list of all reactions read from file
@@ -74,12 +117,25 @@ class SurfReactProb : public SurfReact {
   int readone(char *, char *, int &, int &);
     double wierzbicki_biersack(double , double , double , double , double );
     double getElectricPotential(double , double , double , double );
-
+double yamamura(double , double , double , double , double );
     //  std::vector<DataPointPlasma> loadDataPlasma(const std::string& filename); // Helper function to load the data from the file
+  SurfaceData readSurfaceData(const std::string& filePath);
+  SurfaceDataParams interpolateSurfaceData(double energy_val, double angle_val, double mass);
 
 };
 
 }
+namespace std {
+    template <>
+    struct hash<std::pair<double, double>> {
+        size_t operator()(const std::pair<double, double>& p) const {
+            auto h1 = hash<double>{}(p.first); 
+            auto h2 = hash<double>{}(p.second); 
+            return h1 ^ h2; 
+        }
+    };
+}
+
 
 #endif
 #endif

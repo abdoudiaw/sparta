@@ -28,6 +28,17 @@
 #include "math_const.h"
 #include "memory.h"
 #include "error.h"
+#include <algorithm>
+#include <chrono>
+#include <iostream>
+#include <map>
+// #include "adasRatesInterpolator.h"
+
+std::map<double, std::string> speciesFiles = {
+    {16.0, "data/ADAS_Rates_O.h5"},
+    {184.0, "data/ADAS_Rates_W.h5"}
+};
+
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -141,12 +152,14 @@ double CollideVSS::attempt_collision(int icell, int np, double volume)
   double nattempt;
 
   if (remainflag) {
-    nattempt = 0.5 * np * (np-1) *
-      vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
+    nattempt = np; //0.5 * np * (np-1);
+    // *
+      // vremax[icell][0][0] * dt * fnum / volume + remain[icell][0][0];
     remain[icell][0][0] = nattempt - static_cast<int> (nattempt);
   } else {
-    nattempt = 0.5 * np * (np-1) *
-      vremax[icell][0][0] * dt * fnum / volume + random->uniform();
+    nattempt = np; //0.5 * np * (np-1)  + random->uniform();
+    //  *
+      // vremax[icell][0][0] * dt * fnum / volume + random->uniform();
   }
 
   return nattempt;
@@ -169,13 +182,22 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
  else npairs = ngroup[igroup] * (ngroup[jgroup]);
  //else npairs = 0.5 * ngroup[igroup] * (ngroup[jgroup]);
 
- nattempt = npairs * vremax[icell][igroup][jgroup] * dt * fnum / volume;
+ nattempt = npairs; //* vremax[icell][igroup][jgroup] * dt * fnum / volume;
+//  printf("nattempt = %f\n",nattempt);
+//  printf("vremax = %f\n",vremax[icell][igroup][jgroup]);
+//   printf("dt = %f\n",dt);
+//   printf("fnum = %f\n",fnum);
+//   printf("volume = %f\n",volume);
+//   printf("ngroup[igroup] = %d\n",ngroup[igroup]);
+//   printf("ngroup[jgroup] = %d\n",ngroup[jgroup]);
+//   printf("igroup = %d\n",igroup);
+//   printf("jgroup = %d\n",jgroup);
+//   printf("npairs = %f\n",npairs);
 
-
- if (remainflag) {
-   nattempt += remain[icell][igroup][jgroup];
-   remain[icell][igroup][jgroup] = nattempt - static_cast<int> (nattempt);
- } else nattempt += random->uniform();
+//  if (remainflag) {
+//    nattempt += remain[icell][igroup][jgroup];
+//    remain[icell][igroup][jgroup] = nattempt - static_cast<int> (nattempt);
+//  } else nattempt += random->uniform();
 
  return nattempt;
 }
@@ -189,25 +211,10 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
 int CollideVSS::test_collision(int icell, int igroup, int jgroup,
                                Particle::OnePart *ip, Particle::OnePart *jp)
 {
-  double *vi = ip->v;
-  double *vj = jp->v;
-  int ispecies = ip->ispecies;
-  int jspecies = jp->ispecies;
-  double du  = vi[0] - vj[0];
-  double dv  = vi[1] - vj[1];
-  double dw  = vi[2] - vj[2];
-  double vr2 = du*du + dv*dv + dw*dw;
-  double vro  = pow(vr2,1.0-params[ispecies][jspecies].omega);
+  return 0;
 
-  // although the vremax is calculated for the group,
-  // the individual collisions calculated species dependent vre
-
-  double vre = vro*prefactor[ispecies][jspecies];
-  vremax[icell][igroup][jgroup] = MAX(vre,vremax[icell][igroup][jgroup]);
-  if (vre/vremax[icell][igroup][jgroup] < random->uniform()) return 0;
-  precoln.vr2 = vr2;
-  return 1;
 }
+
 
 /* ---------------------------------------------------------------------- */
 
@@ -215,7 +222,7 @@ void CollideVSS::setup_collision(Particle::OnePart *ip, Particle::OnePart *jp)
 {
   Particle::Species *species = particle->species;
 
-  // printf("setting up collisions!");
+  // printf("setting up collisions!\n");
 
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
@@ -266,6 +273,7 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
   // if a 3rd particle is created, its kspecies >= 0 is returned
   // if 2nd particle is removed, its jspecies is set to -1
 
+  // printf("performing collision!\n");
 
   if (react)
     {reactflag = react->attempt(ip,jp,
@@ -974,3 +982,52 @@ double CollideVSS::extract(int isp, int jsp, const char *name)
   else error->all(FLERR,"Request for unknown parameter from collide");
   return 0.0;
 }
+
+// int CollideVSS::getMaxChargeNumber(double molwt)
+// {
+//     if (molwt == 16.0) {
+//         return 8;  // for Oxygen
+//     } else if (molwt == 184.0) {
+//         return 74;  // for Tungsten
+//     } else {
+//         printf("Invalid species mass\n");
+//         exit(0);
+//     }
+//     return 0;  // Should not reach here
+// }
+
+
+// bool CollideVSS::validateSpeciesChange(double molwt, int sp, int direction) {
+//     if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
+//                           (direction == 1 && sp >= 0 && sp <= 6))) {
+//         return true;
+//     } else if (molwt == 184.0 && sp >= 9 && sp <= 11) {
+//         return true;
+//     }
+//     return false;
+// }
+
+// void CollideVSS::process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+//                                   double te, double ne, RateData &rateData)
+// {
+//     double charge = species[sp].charge;
+//     int maxChargeNumber = getMaxChargeNumber(species[sp].molwt);
+//     charge = std::clamp<int>(charge, 0, maxChargeNumber - 1);
+//     RateResults rateResults = interpolateRateData(charge, te, ne, rateData);
+//     double react_prob_ioniziation = (rateResults.ionization == 0.0) ? 0.0 : 1.0 - exp(-rateResults.ionization * ne * update->dt);
+//     double react_prob_recombination = (rateResults.recombination == 0.0) ? 0.0 : 1.0 - exp(-rateResults.recombination * ne * update->dt);
+    
+//     // Perform the species update based on probabilities
+//     // Ionization event
+//     if (react_prob_ioniziation > random->uniform()) {
+//         if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
+//             p->ispecies = sp - 1;
+//         }
+//     }
+//     // Recombination event
+//     if (react_prob_recombination > random->uniform()) {
+//         if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
+//             p->ispecies = sp + 1;
+//         }
+//     }
+// }

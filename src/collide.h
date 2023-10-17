@@ -18,6 +18,10 @@
 #include "pointers.h"
 #include "memory.h"
 #include "particle.h"
+#include "adasRatesInterpolator.h"
+#include <unordered_map>
+#include <tuple>
+#include <cmath>
 
 namespace SPARTA_NS {
 
@@ -25,6 +29,31 @@ namespace SPARTA_NS {
 
 class Collide : protected Pointers {
  public:
+
+    // enum class ReactionType { Ionization, Recombination };
+    // using Key = std::tuple<std::string, int, ReactionType>; // Material, charge state, and reaction type
+
+    // class ReactionCoefficients {
+    // public:
+    //     double A;
+    //     double B;
+    //     double C;
+
+    //     ReactionCoefficients() : A(0), B(0), C(0) {}
+
+    //     ReactionCoefficients(double a, double b, double c) : A(a), B(b), C(c) {}
+
+    //     double evaluate(double ne, double te) const {
+    //         return A + B * std::pow(std::log10(te), C);
+    //     }
+    // };
+
+    // std::unordered_map<Key, ReactionCoefficients> coeffs_map;
+// double Interpolator(double ne, double te, int reactionType, int charge, std::string material) const ;
+// double getRate(const std::string &material, int charge, ReactionType reactionType, double te) const;
+// double getRate(const std::string &material, int charge, Collide::ReactionType reactionType, double te) const;
+double getRate(const std::string &material, int charge, int reactionType, double te) const;
+
   char *style;
   int rotstyle;       // none/smooth rotational modes
   int vibstyle;       // none/discrete/smooth vibrational modes
@@ -35,6 +64,10 @@ class Collide : protected Pointers {
   bigint ncollide_running,nattempt_running,nreact_running;
 
   Collide(class SPARTA *, int, char **);
+
+    void initialize_coefficients(); // This function will populate coeffs_map
+
+
   virtual ~Collide();
   virtual void init();
   void modify_params(int, char **);
@@ -58,6 +91,15 @@ class Collide : protected Pointers {
   virtual void reset_grid_count(int);
   virtual void add_grid_one();
   virtual void adapt_grid();
+
+  int getMaxChargeNumber(double );
+  bool validateSpeciesChange(double , int , int );
+  // void process_particle(Particle::OnePart *, Particle::Species *, int ,
+  //                                 double , double , RateData &);
+
+                                  void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+                                  double te, double ne); //, RateData &rateData);
+
 
   int ngroups;        // # of groups
 
@@ -172,33 +214,8 @@ class Collide : protected Pointers {
   void set_nn_group(int);
 };
 
+
 }
 
+
 #endif
-
-/* ERROR/WARNING messages:
-
-E: Collision mixture does not exist
-
-Self-explanatory.
-
-E: Collision mixture does not contain all species
-
-The specified mixture must contain all species in the simulation so
-that they can be assigned to collision groups.
-
-E: Must use Kokkos-supported collision style if Kokkos is enabled
-
-Self-explanatory.
-
-E: Cannot (yet) use KOKKOS package with 'collide_modify vibrate discrete'
-
-This feature is not yet supported.
-
-E: Illegal ... command
-
-Self-explanatory.  Check the input script syntax and compare to the
-documentation for the command.  You can use -echo screen as a
-command-line option when running SPARTA to see the offending line.
-
-*/

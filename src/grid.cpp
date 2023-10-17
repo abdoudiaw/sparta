@@ -303,12 +303,14 @@ void Grid::add_child_cell(cellint id, int level, double *lo, double *hi)
 
   if (domain->dimension == 3)
     ci->volume = (hi[0]-lo[0]) * (hi[1]-lo[1]) * (hi[2]-lo[2]);
-  else if (domain->axisymmetric)
+  else if (domain->axisymmetric){
     ci->volume = MY_PI * (hi[1]*hi[1]-lo[1]*lo[1]) * (hi[0]-lo[0]);
-    // printf("ci->volume = %f\n", ci->volume);
-    // printf("hi[1]*hi[1]-lo[1]*lo[1]
-  else
+    printf(" ass ci->volume = %f\n", ci->volume);
+  }
+  else{
     ci->volume = (hi[0]-lo[0]) * (hi[1]-lo[1]);
+    // printf("else volume %g\n", (hi[0]-lo[0]) * (hi[1]-lo[1]));
+    }
 
   // increment both since are adding an unsplit cell
 

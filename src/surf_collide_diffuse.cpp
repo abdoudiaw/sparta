@@ -30,7 +30,6 @@
 #include "math_const.h"
 #include "math_extra.h"
 #include "error.h"
-#include "update.h"
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -242,16 +241,22 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
   // specular reflection
   // reflect incident v around norm
 
+  if (random->uniform() > acc) {
+    MathExtra::reflect3(p->v,norm);
+
+  // diffuse reflection
+  // vrm = most probable speed of species, eqns (4.1) and (4.7)
+  // vperp = velocity component perpendicular to surface along norm, eqn (12.3)
+  // vtan12 = 2 velocity components tangential to surface
+  // tangent1 = component of particle v tangential to surface,
+  //   check if tangent1 = 0 (normal collision), set randomly
+  // tangent2 = norm x tangent1 = orthogonal tangential direction
+  // tangent12 are both unit vectors
+
+  } else {
     double tangent1[3],tangent2[3];
     Particle::Species *species = particle->species;
     int ispecies = p->ispecies;
-    int icell = p->icell;
-    double *x3 = p->x;
-
-    // get temperature of surface
-    std::vector<double> plasmaData = update->get_density_temperature(x3);
-    double converteV2K = 11604.505;
-    double twall = plasmaData[1] * converteV2K;
 
     double vrm = sqrt(2.0*update->boltz * twall / species[ispecies].mass);
     double vperp = vrm * sqrt(-log(random->uniform()));
@@ -330,7 +335,7 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
 
     p->erot = particle->erot(ispecies,twall,random);
     p->evib = particle->evib(ispecies,twall,random);
-  
+  }
 }
 
 /* ----------------------------------------------------------------------
