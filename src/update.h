@@ -22,7 +22,7 @@
 #include <H5Cpp.h>
 #include <map>
 #include <tuple>
-
+#include "particle.h"
 #include <fstream> // for std::ifstream
 #include <iostream> // for std::cerr and std::endl
 
@@ -260,6 +260,28 @@ PlasmaParams interpolate(const PlasmaData2& lower, const PlasmaData2& upper, dou
     const float* gridx, const float* gridz, const float* data);
 
 
+
+// void loadPlasmaData(const std::string &filename) {
+//     plasma_data = readPlasmaData(filename);
+    
+//     flattened_temp_e = flatten(plasma_data.temp_e);
+//     flattened_temp_i = flatten(plasma_data.temp_i);
+//     flattened_dens_e = flatten(plasma_data.dens_e);
+//     flattened_dens_i = flatten(plasma_data.dens_i);
+//     flattened_parr_flow = flatten(plasma_data.parr_flow);
+//     flattened_b_r = flatten(plasma_data.b_r);
+//     flattened_b_z = flatten(plasma_data.b_z);
+//     flattened_b_phi = flatten(plasma_data.b_phi);
+
+//     r_double.assign(plasma_data.r.begin(), plasma_data.r.end());
+//     z_double.assign(plasma_data.z.begin(), plasma_data.z.end());
+// }
+
+  int getMaxChargeNumber(double );
+  bool validateSpeciesChange(double , int , int );
+
+  void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+  double te, double ne); //, RateData &rateData);
 
 
 void getNeighboringPoints(const Point& closestPoint, Point& previousPoint, Point& nextPoint, const std::vector<Point>& points) const;

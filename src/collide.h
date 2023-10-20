@@ -22,36 +22,15 @@
 #include <unordered_map>
 #include <tuple>
 #include <cmath>
-
+#include <unordered_map>
 namespace SPARTA_NS {
 
 #define DELTAPART 128
 
+
 class Collide : protected Pointers {
  public:
 
-    // enum class ReactionType { Ionization, Recombination };
-    // using Key = std::tuple<std::string, int, ReactionType>; // Material, charge state, and reaction type
-
-    // class ReactionCoefficients {
-    // public:
-    //     double A;
-    //     double B;
-    //     double C;
-
-    //     ReactionCoefficients() : A(0), B(0), C(0) {}
-
-    //     ReactionCoefficients(double a, double b, double c) : A(a), B(b), C(c) {}
-
-    //     double evaluate(double ne, double te) const {
-    //         return A + B * std::pow(std::log10(te), C);
-    //     }
-    // };
-
-    // std::unordered_map<Key, ReactionCoefficients> coeffs_map;
-// double Interpolator(double ne, double te, int reactionType, int charge, std::string material) const ;
-// double getRate(const std::string &material, int charge, ReactionType reactionType, double te) const;
-// double getRate(const std::string &material, int charge, Collide::ReactionType reactionType, double te) const;
 double getRate(const std::string &material, int charge, int reactionType, double te) const;
 
   char *style;
@@ -92,18 +71,18 @@ double getRate(const std::string &material, int charge, int reactionType, double
   virtual void add_grid_one();
   virtual void adapt_grid();
 
-  int getMaxChargeNumber(double );
-  bool validateSpeciesChange(double , int , int );
-  // void process_particle(Particle::OnePart *, Particle::Species *, int ,
-  //                                 double , double , RateData &);
+  // int getMaxChargeNumber(double );
+  // bool validateSpeciesChange(double , int , int );
 
-                                  void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
-                                  double te, double ne); //, RateData &rateData);
+  // void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+  // double te, double ne); //, RateData &rateData);
 
 
   int ngroups;        // # of groups
 
  protected:
+
+
   int npmax;          // max # of particles in plist
   int *plist;         // list of particle indices for the entire cell
 

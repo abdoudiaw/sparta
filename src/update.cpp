@@ -109,7 +109,10 @@ const double ME = 9.10938356e-31;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<double> dist(0.0, 1.0);
 std::normal_distribution<double> distribution(0.0,1.0);
+
 const double TWO_PI = 2.0 * M_PI;
+#include <random>
+
 
 
 /* ---------------------------------------------------------------------- */
@@ -543,6 +546,21 @@ template < int DIM, int SURF, int OPT > void Update::move()
     double te = params.temp_e;
     double ne = params.dens_e;
     double flow = params.parr_flow;
+    
+
+    // / Start the timer just before calling the function
+// auto start_time = std::chrono::high_resolution_clock::now();
+
+process_particle(ipart, species, isp, te, ne);
+
+// Stop the timer right after the function returns
+// auto end_time = std::chrono::high_resolution_clock::now();
+
+// Compute the elapsed time in seconds
+// double elapsed_time = std::chrono::duration<double, std::ratio<1, 1>>(end_time - start_time).count();
+
+// std::cout << "Time taken for process_particle: " << elapsed_time << " seconds." << std::endl;
+
 
       exclude = -1;
 
@@ -557,6 +575,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
         // check whether charge is zero
         if (charge == 0.0) {
           // printf("Charge is zero\n");
+          // dtremain = dtremain;
           xnew[0] = x[0] + dtremain*v[0];
           xnew[1] = x[1] + dtremain*v[1];
           if (DIM != 2) xnew[2] = x[2] + dtremain*v[2];
@@ -567,10 +586,6 @@ template < int DIM, int SURF, int OPT > void Update::move()
     //       // Apply collisional diffusion
         std::array<double, 3> Efield;
         Efield = potential_brooks(xc, params);
-        double Bfield[3];
-        Bfield[0] = params.b_r;
-        Bfield[1] = params.b_z;
-        Bfield[2] = params.b_phi;
         backgroundCollisions(xc, v, dtremain, species[isp].molwt, species[isp].charge, params);
         pusher_boris2D(xc, x, v, xnew, charge, mass, dtremain, Efield.data(), Bfield);
         crossFieldDiffusion(xc, xnew, dtremain, Bfield );
@@ -2099,6 +2114,7 @@ double interpolate_at(const std::vector<double>& flattened_data,
 
     return interpolated_value;
 }
+
 PlasmaParams Update::interpolatePlasmaData(double r_val, double z_val) {
     // Check the plasma cache for existing data
     std::pair<double, double> key = {r_val, z_val};
@@ -2259,11 +2275,11 @@ std::array<double, 3> Update::potential_brooks(double *xc, const PlasmaParams pa
 
      std::array<double, 3> coords = {xc[0], xc[1], xc[2]};
      std::array<double, 3> Efield = {0.0, 0.0, 0.0};
-    // auto it = EfieldCache.find(coords); // Use a different cache for E field
-    // if (it != EfieldCache.end()) {
-    //     return it->second;
-    // }
-    // // Pre-compute constants
+    auto it = EfieldCache.find(coords); // Use a different cache for E field
+    if (it != EfieldCache.end()) {
+        return it->second;
+    }
+    // Pre-compute constants
     
     static const double normFactor = kB * eV2Kelvin / protonCharge;
     static const double potentialPart = 0.5 * std::log(2 * M_PI * ME / proton_mass);
@@ -2310,32 +2326,18 @@ std::array<double, 3> Update::potential_brooks(double *xc, const PlasmaParams pa
 
         }
 
-    // EfieldCache[coords] = Efield;
-
-      // Save cache to file
-      std::string filename = "Efield_cache.csv"; // Changed the name for clarity
-      std::ofstream file(filename, std::ios::app); // Open the file in append mode
-      if (!file.is_open()) {
-          std::cerr << "Failed to open file for writing: " << filename << std::endl;
-      }
-
-      // Save Efield to file
-      file << xc[0] << "," << xc[1] << "," << xc[2] <<  "," << Efield[0] << "," << Efield[1] << "," << Efield[2] << "\n";
-
-      file.close();
-
-
-    // // Save cache to file
-    // std::string filename = "Efield_cache.csv"; // Changed the name for clarity
-    // std::ofstream file(filename);
-    // if (!file.is_open()) {
-    //     std::cerr << "Failed to open file for writing: " << filename << std::endl;
-    // }
-    // // Save EfieldCache to file
-    // for (const auto& pair : EfieldCache) {
-    //     file << pair.first[0] << "," << pair.first[1] << "," << pair.first[2] << "," << pair.second[0] << "," << pair.second[1] << "," << pair.second[2] << "\n";        
-    // }
-    // file.close();
+    EfieldCache[coords] = Efield;
+    // Save cache to file
+    std::string filename = "Efield_cache.csv"; // Changed the name for clarity
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+    }
+    // Save EfieldCache to file
+    for (const auto& pair : EfieldCache) {
+        file << pair.first[0] << "," << pair.first[1] << "," << pair.first[2] << "," << pair.second[0] << "," << pair.second[1] << "," << pair.second[2] << "\n";        
+    }
+    file.close();
 
     return Efield;
 }
@@ -2619,3 +2621,96 @@ double Update::interp2dCombined(double x, double y, double z, int nx, int nz,
     return fxz;
 }
 
+
+
+
+int Update::getMaxChargeNumber(double molwt)
+{
+    if (molwt == 16.0) {
+        return 8;  // for Oxygen
+    } else if (molwt == 184.0) {
+        return 74;  // for Tungsten
+    } else {
+        printf("Invalid species mass\n");
+        exit(0);
+    }
+    return 0;  // Should not reach here
+}
+
+
+bool Update::validateSpeciesChange(double molwt, int sp, int direction) {
+    if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
+                          (direction == 1 && sp >= 0 && sp <= 6))) {
+                            // printf("Valid species change\n");
+        return true;
+    } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
+        return true;
+    }
+    return false;
+}
+
+enum Material { W = 184, O = 16, INVALID = -1 };
+
+std::map<Material, RateData> rateDataCache;
+
+std::string getMaterialName(Material material) {
+    switch (material) {
+        case W: return "W";
+        case O: return "O";
+        default: return "INVALID";
+    }
+}
+
+
+void Update::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
+    Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
+
+    // Ensure we have a valid material
+    if (material != W && material != O) {
+        printf("Invalid species mass\n");
+        exit(0);
+    }
+
+    // Load rate data only if not already cached
+    if (rateDataCache.find(material) == rateDataCache.end()) {
+        std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
+        rateDataCache[material] = readRateData(filename);
+    }
+
+    RateData& rateData = rateDataCache[material];
+    double charge = species[sp].charge;
+
+    // Convert te and ne to log10
+    double log10_te = log10(te);
+    double log10_ne = log10(ne);
+
+    double dt = update->dt;
+
+    RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
+    double ionization_rate = pow(10, rateResults.ionization);
+    double recombination_rate = pow(10, rateResults.recombination);
+
+    double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
+    double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
+
+    // Bound the values
+    react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
+    react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
+
+    double seed_ionization = dist(gen);
+    double seed_recombination = dist(gen);
+
+    if (react_prob_ioniziation > seed_ionization) {
+        if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
+            p->ispecies = sp - 1;
+        }
+    } else if (react_prob_recombination > seed_recombination) {
+        if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
+            p->ispecies = sp + 1;
+        }
+    }
+
+    if (material == W && charge == 5.0) {
+        p->ispecies = sp;
+    }
+}

@@ -184,9 +184,10 @@ double random_prob = random->uniform();
     // printf("mass_incident = %g\n",mass_incident);
     //     double energy_incident_J = 0.5 * mass_incident * MathExtra::lensq3(v3)  ; 
     //     printf("energy_incident_J = %g\n",energy_incident_J);
+  //  printf("mass %g\n", mass_incident);
 
-    // double energy_incident_eV = 0.5 * mass_incident * normVel * joule2ev ; 
-    double energy_incident_eV =  3.0 * te * charge_incident + 2 * charge_incident * te + 3 * ti ;
+    double energy_incident_eV = 0.5 * mass_incident * normVel * joule2ev ; 
+    // double energy_incident_eV =  3.0 * te * charge_incident + 2 * charge_incident * te + 3 * ti ;
     // printf("energy_incident_eV = %g\n",energy_incident_eV);
 
     // energy_incident = energy_incident_eV; 
@@ -218,10 +219,8 @@ double random_prob = random->uniform();
     }
     // printf("angle_velocity_normal = %g\n",angle_velocity_normal);
 
-  SurfaceDataParams  params2 = interpolateSurfaceData(energy_incident_eV, angle_velocity_normal, species_mass_amu);
+    SurfaceDataParams  params2 = interpolateSurfaceData(energy_incident_eV, angle_velocity_normal, species_mass_amu);
 
-    // interpolateSurfaceData(double energy_val, double angle_val, double mass) 
-    // exit(0);
     double angle_degrees = 0; //angle * 180.0 / M_PI;
   
   double target_Z1 = 74.;
@@ -256,48 +255,47 @@ double random_prob = random->uniform();
     double react_prob_sputtering = 0.0;
 
     double total_coefficient = reflection_coefficient + sputtering_coefficient;
+// printf("total_coefficient = %g\n",total_coefficient);
+// exit(0);
 
+if (total_coefficient == 0.0) {
+    // Assuming you want to set both to zero if total_coefficient is zero
+    react_prob_reflection = 0.0;
+    react_prob_sputtering = 0.0;
+} else {
+    if (reflection_coefficient == 0.0) {
+        react_prob_reflection = 0.0;
+    } else {
+        react_prob_reflection = reflection_coefficient / total_coefficient;
+    }
 
-  if (total_coefficient == 0.0) {
-      // Assuming you want to set both to zero if total_coefficient is zero
-      react_prob_reflection = 0.0;
-      react_prob_sputtering = 0.0;
-  } else {
-      if (reflection_coefficient == 0.0) {
-          react_prob_reflection = 0.0;
-      } else {
-          react_prob_reflection = reflection_coefficient / total_coefficient;
-      }
-
-      if (sputtering_coefficient == 0.0) {
-          react_prob_sputtering = 0.0;
-      } else {
-          react_prob_sputtering = sputtering_coefficient / total_coefficient;
-      }
-  }
+    if (sputtering_coefficient == 0.0) {
+        react_prob_sputtering = 0.0;
+    } else {
+        react_prob_sputtering = sputtering_coefficient / total_coefficient;
+    }
+}
 
     if (total_coefficient  <=0){
         // remove particle
         ip = NULL;
         return 0;
+        // // set velocity to zero
+        // for (int j = 0; j < 3; j++) {
+        // v3[j] = 0.0;
+        // }
+        // memcpy(ip->v,v3,3*sizeof(double));
+        
     }
     else{    
       nsingle++;
       tally_single[list[i]]++;
-
-    // print react_prob_sputtering > random_prob
-    // printf("react_prob_sputtering = %g\n",react_prob_sputtering);
-    // printf("random_prob = %g\n",random_prob);
-
      if (react_prob_sputtering > random_prob) { 
       switch (r->type) {
        case DISSOCIATION:
         {
           double x[3],v[3];
           ip->ispecies = r->products[0];
-          // print species ispecies
-          // printf("species = %d\n",ip->ispecies);
-
           int id = MAXSMALLINT*random->uniform();
           memcpy(x,ip->x,3*sizeof(double));
           memcpy(v,ip->v,3*sizeof(double));
@@ -313,33 +311,19 @@ double random_prob = random->uniform();
       }
     }
     else{
-      // printf("reflection\n");
-      // reflect same species
-      // ip->ispecies = r->ispecies;
-      // ip->ispecies = r->
-      // printf("species = %d\n",ip->ispecies);
-
+      ip->ispecies = 8;
       double theta = 2.0 * random->uniform() * M_PI;
       double vtangent = vrm * sqrt(-log(random->uniform()));
-      // printf("vtangent = %g\n",vtangent);
       double vx = vtangent * sin(theta);
       double vy = vtangent * cos(theta);
       double vz = 0.0;
-
       double v[3];
       v[0] = vx;
       v[1] = -std::abs(vy);
       v[2] = vz;
-      // printf("velocity of reflected particle = %g %g %g\n",v[0],v[1],v[2]);
-
-      // printf("velocity of reflected particle = %g %g %g\n",v[0],v[1],v[2]);
-
             for (int j = 0; j < 3; j++) {
         v[j] = ip->v[j];
-        // printf("velocity of incident particle = %g\n",v[j]);
-        // exit(0);
       }
-      //v[1
       memcpy(ip->v,v,3*sizeof(double));
 
         return (list[i] + 1);
@@ -812,13 +796,14 @@ SurfaceData SurfReactProb::readSurfaceData(const std::string& filePath) {
 
 std::string getFilenameFromMass(double mass) {
     const double mass_O = 15.999; 
-    const double mass_W = 183.84;
+    const double mass_W = 184.0;
+    // printf("mass = %g\n",mass);
     if (std::fabs(mass - mass_O) < 1e-2) {
         return "O_on_W.h5";
     } else if (std::fabs(mass - mass_W) < 1e-2) {
         return "W_on_W.h5";
     } else {
-        printf("Material symbol not found for mass = %g\n", mass);
+        printf("Material symbol not found for mass and charge = %g\n",mass);
         exit(0);
     }
 }

@@ -1,5 +1,11 @@
 
 #include "adasRatesInterpolator.h"
+#include <vector>
+#include <cmath>
+#include <gsl/gsl_interp2d.h>
+#include <gsl/gsl_spline.h>
+
+
 
 static std::unordered_map<CacheKey, RateResults> rateCache;
 
@@ -78,74 +84,107 @@ RateData readRateData(const std::string& filePath) {
 }
 
 
-double computeRate(const std::vector<float>& rateGrid_Temp,
-                       const std::vector<float>& rateGrid_Dens,
-                       const std::vector<std::vector<float>>& Rates,
-                       double te, double ne, std::string material) {
+RateResults interpolateRateDataIonization(double charge, double te, double ne, const RateData& rateData, std::string material) {
+    size_t charge_idx = static_cast<size_t>(charge);
 
-    double logT = std::log10(te);
-    double logn = std::log10(ne);
 
-    double d_T = rateGrid_Temp[1] - rateGrid_Temp[0];
-    double d_n = rateGrid_Dens[1] - rateGrid_Dens[0];
+    std::vector<double> tempDouble(rateData.gridTemperature_Ionization.begin(), rateData.gridTemperature_Ionization.end());
+    std::vector<double> densityDouble(rateData.gridDensity_Ionization.begin(), rateData.gridDensity_Ionization.end());
 
-    int nT = rateGrid_Temp.size();
-    int nD = rateGrid_Dens.size();
+    std::vector<double> interpRatesAtTe(rateData.gridDensity_Ionization.size());
 
-    int indT_temp = static_cast<int>(std::floor((logT - rateGrid_Temp[0]) / d_T));
-    int indT = (indT_temp < 0) ? 0 : ((indT_temp > nT - 2) ? nT - 2 : indT_temp);
-
-    int indN_temp = static_cast<int>(std::floor((logn - rateGrid_Dens[0]) / d_n));
-    int indN = (indN_temp < 0) ? 0 : ((indN_temp > nD - 2) ? nD - 2 : indN_temp);
-
-    double tempIndT1 = std::pow(10.0, rateGrid_Temp[indT + 1]);
-    double tempIndT = std::pow(10.0, rateGrid_Temp[indT]);
-    double densIndN1 = std::pow(10.0, rateGrid_Dens[indN + 1]);
-    double densIndN = std::pow(10.0, rateGrid_Dens[indN]);
-
-    double aT = tempIndT1 - te;
-    double bT = te - tempIndT;
-    double aN = densIndN1 - ne;
-    double bN = ne - densIndN;
-
-    double abT = aT + bT;
-    double abN = aN + bN;
-
-    double fx_z1 = (aN * std::pow(10.0, Rates[indT][indN]) +
-                    bN * std::pow(10.0, Rates[indT][indN + 1])) / abN;
-    double fx_z2 = (aN * std::pow(10.0, Rates[indT + 1][indN]) +
-                    bN * std::pow(10.0, Rates[indT + 1][indN + 1])) / abN;
-
-    return (aT * fx_z1 + bT * fx_z2) / abT;
-}
-
-RateResults interpolateRateData(int charge, double te, double ne, const RateData rateData, std::string material) {
-
-    static std::unordered_map<CacheKey, RateResults> rateCache;
-
-    CacheKey key{charge, te, ne, material};
-    // printf("key: %d, %f, %f %s\n", key.charge, key.te, key.ne, key.material.c_str());
-
-    // Check cache first
-    auto it = rateCache.find(key);
-    if (it != rateCache.end()) {
-        return it->second;
+ // Check if 'te' and 'ne' are within the range of data. If not, return zero.
+    if (te < tempDouble.front() || te > tempDouble.back() ||
+        ne < densityDouble.front() || ne > densityDouble.back()) {
+        return RateResults{0.0, 0.0};
     }
 
-    // charge = (charge > 73) ? 0 : charge;
+    gsl_interp_accel *acc_te = gsl_interp_accel_alloc();
+    gsl_spline *spline_te = gsl_spline_alloc(gsl_interp_cspline, tempDouble.size());
 
-    double ionization_rates = computeRate(rateData.gridTemperature_Ionization,
-                                          rateData.gridDensity_Ionization,
-                                          rateData.IonizationRateCoeff[charge],
-                                          te, ne, material);
+    for(size_t i = 0; i < rateData.gridDensity_Ionization.size(); ++i) {
+        std::vector<double> ratesForDensity(rateData.IonizationRateCoeff[charge_idx][i].begin(), rateData.IonizationRateCoeff[charge_idx][i].end());
+        
+        gsl_spline_init(spline_te, tempDouble.data(), ratesForDensity.data(), tempDouble.size());
+        interpRatesAtTe[i] = gsl_spline_eval(spline_te, te, acc_te);
+    }
 
-    double recombination_rates = computeRate(rateData.gridTemperature_Recombination,
-                                             rateData.gridDensity_Recombination,
-                                             rateData.RecombinationRateCoeff[charge],
-                                             te, ne, material);
+    gsl_spline_free(spline_te);
+    gsl_interp_accel_free(acc_te);
 
-    return RateResults{ionization_rates, recombination_rates};
+    // Interpolate over densities
+    gsl_interp_accel *acc_ne = gsl_interp_accel_alloc();
+    gsl_spline *spline_ne = gsl_spline_alloc(gsl_interp_cspline, densityDouble.size());
+    gsl_spline_init(spline_ne, densityDouble.data(), interpRatesAtTe.data(), densityDouble.size());
+
+    double rate_final = gsl_spline_eval(spline_ne, ne, acc_ne);
+
+    gsl_spline_free(spline_ne);
+    gsl_interp_accel_free(acc_ne);
+
+    return RateResults{rate_final, 0.0};  // Assuming recombination isn't being interpolated here
 }
+
+RateResults interpolateRateDataRecombination(double charge, double te, double ne, const RateData& rateData, std::string material) {
+    size_t charge_idx = static_cast<size_t>(charge);
+
+    // Convert temperature and density grids once for recombination
+    std::vector<double> tempDouble(rateData.gridTemperature_Recombination.begin(), rateData.gridTemperature_Recombination.end());
+    std::vector<double> densityDouble(rateData.gridDensity_Recombination.begin(), rateData.gridDensity_Recombination.end());
+
+    std::vector<double> interpRatesAtTe(rateData.gridDensity_Recombination.size());
+
+ // Check if 'te' and 'ne' are within the range of data. If not, return zero.
+    if (te < tempDouble.front() || te > tempDouble.back() ||
+        ne < densityDouble.front() || ne > densityDouble.back()) {
+        return RateResults{0.0, 0.0};
+    }
+
+    gsl_interp_accel *acc_te = gsl_interp_accel_alloc();
+    gsl_spline *spline_te = gsl_spline_alloc(gsl_interp_cspline, tempDouble.size());
+
+    for(size_t i = 0; i < rateData.gridDensity_Recombination.size(); ++i) {
+        std::vector<double> ratesForDensity(rateData.RecombinationRateCoeff[charge_idx][i].begin(), rateData.RecombinationRateCoeff[charge_idx][i].end());
+        
+        gsl_spline_init(spline_te, tempDouble.data(), ratesForDensity.data(), tempDouble.size());
+        interpRatesAtTe[i] = gsl_spline_eval(spline_te, te, acc_te);
+    }
+
+    gsl_spline_free(spline_te);
+    gsl_interp_accel_free(acc_te);
+
+    // Interpolate over densities for recombination
+    gsl_interp_accel *acc_ne = gsl_interp_accel_alloc();
+    gsl_spline *spline_ne = gsl_spline_alloc(gsl_interp_cspline, densityDouble.size());
+    gsl_spline_init(spline_ne, densityDouble.data(), interpRatesAtTe.data(), densityDouble.size());
+
+    double rate_final = gsl_spline_eval(spline_ne, ne, acc_ne);
+
+    gsl_spline_free(spline_ne);
+    gsl_interp_accel_free(acc_ne);
+
+    return RateResults{0.0, rate_final};  // Now the recombination rate is being interpolated and returned
+}
+
+RateResults interpolateRates(double charge, double te, double ne, const RateData& rateData, std::string material) {
+
+    double ionization_rate = 0.0;
+    double recombination_rate = 0.0;
+    double nuclearCharge = rateData.Atomic_Number[0];
+
+    // Do not ionize fully ionized and do not recombine neutral
+    if (charge < nuclearCharge) {
+        ionization_rate = interpolateRateDataIonization(charge, te, ne, rateData, material).ionization;
+    }
+
+    if (1 < charge && charge <= nuclearCharge) {
+        double tableIndex = charge - 1; // Note: This assumes that charge is 1-based, which seems to be the case from your description.
+        recombination_rate = interpolateRateDataRecombination(tableIndex, te, ne, rateData, material).recombination;
+    }
+
+    return RateResults{ionization_rate, recombination_rate};
+}
+
 
 static std::unordered_map<std::string, RateData> rateDataCache;
 

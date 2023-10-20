@@ -646,262 +646,52 @@ template < int NEARCP > void Collide::collisions_group()
   int *next = particle->next;
   int *species2group = mixture->species2group;
 //    continue;
- for (int ip = 0; ip < particle->nlocal; ip++) {
-     Particle::OnePart *ipart = &particles[ip];
-     int ispecies = ipart->ispecies;
-     int particle_mass = species[ispecies].molwt;
-     int icell = ipart->icell;
+  std::unordered_map<int, std::pair<double, double>> cellCenters;
 
-     double *lo = grid->cells[icell].lo;
-     double *hi = grid->cells[icell].hi;
-     double xc[2] = {0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1])};
+    // Declare timing variables
+    std::chrono::high_resolution_clock::time_point t1, t2;
+    std::chrono::duration<double> duration;
 
-     PlasmaParams params = update->interpolatePlasmaData(xc[0], xc[1]);
-      double te = params.temp_e;
-      double ne = params.dens_e;
+    t1 = std::chrono::high_resolution_clock::now();  // Start the total process timer
 
-     process_particle(ipart, species, ispecies, params.temp_e, params.dens_e); //, rateData_i);
- }
+  int step = update->ntimestep;
+  // printf("step: %d\n", step);
+  // if (step % 1000 == 0) { 
+    // printf("step: %d\n", step);
+
+    // 2. Start your loop
+    for (int ip = 0; ip < particle->nlocal; ip++) {
+        Particle::OnePart *ipart = &particles[ip];
+        int ispecies = ipart->ispecies;
+        int particle_mass = species[ispecies].molwt;
+        int icell = ipart->icell;
+
+        // 3. Check the cellCenters cache
+        std::pair<double, double> xc;
+        if (cellCenters.find(icell) == cellCenters.end()) {
+            double *lo = grid->cells[icell].lo;
+            double *hi = grid->cells[icell].hi;
+            xc = {0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1])};
+            cellCenters[icell] = xc;
+        } else {
+            xc = cellCenters[icell];
+        }
+
+          // 4. Use the xc values to get plasma parameters
+          PlasmaParams params = update->interpolatePlasmaData(xc.first, xc.second);
+
+          // 5. Continue with your existing code
+          double te = params.temp_e;
+          double ne = params.dens_e;
+          std::chrono::high_resolution_clock::time_point t_interpolate_start = std::chrono::high_resolution_clock::now();
+
+          // process_particle(ipart, species, ispecies, te, ne);
+    
+    }
 }
 
-
-//   for (int jg = 0; jg < ngroups; jg++) {
-//       int _mass = species[jg].molwt;
-//       unique_masses.insert(_mass);
-//   }
-//   for (int mass : unique_masses) {
-//       std::string betafilename = speciesFilenames[mass];
-//       if (betafilename.empty()) {
-//           printf("No filename found for mass %d\n", mass);
-//           continue;
-//       }
-//       // Check if the file exists before trying to read it
-//       std::ifstream filecheck(betafilename);
-//       if (!filecheck.good()) {
-//           printf("File %s not found or not accessible.\n", betafilename.c_str());
-//           continue;
-//       }
-//       filecheck.close();
-//       RateData rateData_i = readRateDataOnce(betafilename);
-//       // Add to the map
-//       massRateDataMap[mass] = rateData_i;
-//   }
-
-//   // loop over
-//   // get species mass
-
-
-//   int *next = particle->next;
-//   int *species2group = mixture->species2group;
-
-// // Particle::Species *species = particle->species;
-// // loop over all particles and get their species
-//   for (int ip = 0; ip < particle->nlocal; ip++) {
-
-//       int ispecies = particles[ip].ispecies;
-//       int _mass = species[ispecies].molwt;
-//       // get particle pointer
-//       Particle::OnePart *ipart = &particles[ip];
-//       // get cell
-//       int icell = particles[ip].icell;
-
-//       double *lo = grid->cells[icell].lo;
-//       double *hi = grid->cells[icell].hi;
-//       double xc[2] = {
-//       0.5 * (lo[0] + hi[0]),
-//       0.5 * (lo[1] + hi[1])
-//     };
-//       PlasmaParams params = update->interpolatePlasmaData(xc[0], xc[1]);
-//       double te = params.temp_e;
-//       double ne = params.dens_e;
-
-//       std::string ifilename = speciesFilenames[_mass];
-//       RateData rateData_i = readRateDataOnce(ifilename);
-//       process_particle(ipart, species, ispecies, te, ne, rateData_i);
-
-//   }
 // }
 
-//   for (int icell = 0; icell < nglocal; icell++) {
-//     np = cinfo[icell].count;
-//     if (np <= 1) continue;
-//     ip = cinfo[icell].first;
-//     volume = cinfo[icell].volume / cinfo[icell].weight;
-//     // if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
-
-//     // reallocate plist and p2g if necessary
-
-//     if (np > npmax) {
-//       while (np > npmax) npmax += DELTAPART;
-//       memory->destroy(plist);
-//       memory->create(plist,npmax,"collide:plist");
-//       memory->destroy(p2g);
-//       memory->create(p2g,npmax,2,"collide:p2g");
-//     }
-//     for (i = 0; i < ngroups; i++) ngroup[i] = 0;
-//     n = 0;
-
-//     while (ip >= 0) {
-//       isp = particles[ip].ispecies;
-//       igroup = species2group[isp];
-//       if (ngroup[igroup] == maxgroup[igroup]) {
-//         maxgroup[igroup] += DELTAPART;
-//         memory->grow(glist[igroup],maxgroup[igroup],"collide:glist");
-//       }
-//       ng = ngroup[igroup];
-//       glist[igroup][ng] = n;
-//       p2g[n][0] = igroup;
-//       p2g[n][1] = ng;
-//       plist[n] = ip;
-//       ngroup[igroup]++;
-//       n++;
-//       ip = next[ip];
-//     }
-
-//     if (NEARCP) {
-//       ngmax = 0;
-//       for (i = 0; i < ngroups; i++) ngmax = MAX(ngmax,ngroup[i]);
-//       if (ngmax > max_nn) {
-//         realloc_nn(ngmax,nn_last_partner_igroup);
-//         realloc_nn(ngmax,nn_last_partner_jgroup);
-//       }
-//     }
-
-//     npair = 0;
-//     for (igroup = 0; igroup < ngroups; igroup++)
-//       for (jgroup = igroup; jgroup < ngroups; jgroup++) {
-
-//         attempt = attempt_collision(icell,igroup,jgroup,volume);
-//         nattempt = static_cast<int> (attempt);
-
-//         if (nattempt) {
-//           gpair[npair][0] = igroup;
-//           gpair[npair][1] = jgroup;
-//           gpair[npair][2] = nattempt;
-//           nattempt_one += nattempt;
-//           npair++;
-//         }
-//       }
-
-//     for (ipair = 0; ipair < npair; ipair++) {
-//       igroup = gpair[ipair][0];
-//       jgroup = gpair[ipair][1];
-//       nattempt = gpair[ipair][2];
-
-//       ni = &ngroup[igroup];
-//       nj = &ngroup[jgroup];
-//       ilist = glist[igroup];
-//       jlist = glist[jgroup];
-
-//       if (*ni == 0 || *nj == 0) continue;
-//       if (igroup == jgroup && *ni == 1) continue;
-
-//       if (NEARCP) {
-//         nn_igroup = nn_last_partner_igroup;
-//         if (igroup == jgroup) nn_jgroup = nn_last_partner_igroup;
-//         else nn_jgroup = nn_last_partner_jgroup;
-//         memset(nn_igroup,0,(*ni)*sizeof(int));
-//         if (igroup != jgroup) memset(nn_jgroup,0,(*nj)*sizeof(int));
-//       }
-
-//       for (int iattempt = 0; iattempt < nattempt; iattempt++) {
-//         i = *ni * random->uniform();
-//         if (NEARCP) j = find_nn_group(i,ilist,*nj,jlist,plist,nn_igroup,nn_jgroup);
-//         else {
-//           j = *nj * random->uniform();
-//           if (igroup == jgroup)
-//             while (i == j) j = *nj * random->uniform();
-//         }
-
-//         ipart = &particles[plist[ilist[i]]];
-//         jpart = &particles[plist[jlist[j]]];
-
-//         // printf("before test collision\n");
-//         if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
-        
-//         if (NEARCP) {
-//           nn_igroup[i] = j+1;
-//           nn_jgroup[j] = i+1;
-//         }
-
-//         newgroup = species2group[ipart->ispecies];
-//         if (newgroup != igroup) {
-//           addgroup(newgroup,ilist[i]);
-//           delgroup(igroup,i);
-//           ilist = glist[igroup];
-//           jlist = glist[jgroup];
-//           // this line needed if jgroup=igroup and delgroup() moved J particle
-//           if (jgroup == igroup && j == *ni) j = i;
-//         }
-
-//         if (jpart) {
-//           newgroup = species2group[jpart->ispecies];
-//           if (newgroup != jgroup) {
-//             addgroup(newgroup,jlist[j]);
-//             delgroup(jgroup,j);
-//             ilist = glist[igroup];
-//             jlist = glist[jgroup];
-//           }
-
-//         } else {
-//           if (ndelete == maxdelete) {
-//             maxdelete += DELTADELETE;
-//             memory->grow(dellist,maxdelete,"collide:dellist");
-//           }
-//           pindex = jlist[j];
-//           dellist[ndelete++] = plist[pindex];
-
-//           delgroup(jgroup,j);
-
-//           plist[pindex] = plist[np-1];
-//           p2g[pindex][0] = p2g[np-1][0];
-//           p2g[pindex][1] = p2g[np-1][1];
-//           if (pindex < np-1) glist[p2g[pindex][0]][p2g[pindex][1]] = pindex;
-//           np--;
-
-//           if (NEARCP) nn_jgroup[j] = nn_jgroup[*nj];
-//         }
-
-//         if (kpart) {
-//           newgroup = species2group[kpart->ispecies];
-
-//           if (NEARCP) {
-//             if (newgroup == igroup || newgroup == jgroup) {
-//               n = ngroup[newgroup];
-//               set_nn_group(n);
-//               nn_igroup = nn_last_partner_igroup;
-//               if (igroup == jgroup) nn_jgroup = nn_last_partner_igroup;
-//               else nn_jgroup = nn_last_partner_jgroup;
-//               nn_igroup[n] = 0;
-//               nn_jgroup[n] = 0;
-//             }
-//           }
-
-//           if (np == npmax) {
-//             npmax += DELTAPART;
-//             memory->grow(plist,npmax,"collide:plist");
-//             memory->grow(p2g,npmax,2,"collide:p2g");
-//           }
-//           plist[np++] = particle->nlocal-1;
-
-//           addgroup(newgroup,np-1);
-//           ilist = glist[igroup];
-//           jlist = glist[jgroup];
-//           particles = particle->particles;
-//         }
-//         // test to exit attempt loop due to groups becoming too small
-//         if (*ni <= 1) {
-//           if (*ni == 0) break;
-//           if (igroup == jgroup) break;
-//         }
-//         if (*nj <= 1) {
-//           if (*nj == 0) break;
-//           if (igroup == jgroup) break;
-//         }
-//       }
-//     }
-//   }
-// }
 
 /* ----------------------------------------------------------------------
    NTC algorithm for a single group with ambipolar approximation
@@ -2097,189 +1887,93 @@ void Collide::set_nn_group(int n)
 }
 
 
-int Collide::getMaxChargeNumber(double molwt)
-{
-    if (molwt == 16.0) {
-        return 8;  // for Oxygen
-    } else if (molwt == 184.0) {
-        return 74;  // for Tungsten
-    } else {
-        printf("Invalid species mass\n");
-        exit(0);
-    }
-    return 0;  // Should not reach here
-}
-
-
-bool Collide::validateSpeciesChange(double molwt, int sp, int direction) {
-    if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
-                          (direction == 1 && sp >= 0 && sp <= 6))) {
-                            // printf("Valid species change\n");
-        return true;
-    } else if (molwt == 184.0 && sp >= 9 && sp <= 11) {
-        return true;
-    }
-    return false;
-}
-
-enum Material { W = 184, O = 16, INVALID = -1 };
-
-std::map<Material, RateData> rateDataCache;
-
-std::string getMaterialName(Material material) {
-    switch (material) {
-        case W: return "W";
-        case O: return "O";
-        default: return "INVALID";
-    }
-}
-
-void Collide::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
-    Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
-    
-    // Ensure we have a valid material
-    if (material != W && material != O) {
-        printf("Invalid species mass\n");
-        exit(0);
-    }
-
-    // Load rate data only if not already cached
-    if (rateDataCache.find(material) == rateDataCache.end()) {
-        std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
-        rateDataCache[material] = readRateData(filename);
-    }
-
-    RateData& rateData = rateDataCache[material];
-    
-    double charge = species[sp].charge;
-    RateResults rateResults;
-
-
-    if ((material == O && charge == 8) || (material == W && charge == 74)) {
-        // rateResults = interpolateRateData(charge - 1, te, ne, rateData, material);
-        rateResults = interpolateRateData(charge-1, te, ne, rateData, getMaterialName(material));
-
-        rateResults.ionization = 0.0;
-    } else if (charge == 0) {
-        rateResults = interpolateRateData(charge, te, ne, rateData, getMaterialName(material));
-        rateResults.recombination = 0.0;
-    } else {
-        rateResults = interpolateRateData(charge, te, ne, rateData, getMaterialName(material));
-    }
-
-    double dt = update->dt;  // Cache the value if accessed multiple times
-    double react_prob_ioniziation = 1.0 - exp(-rateResults.ionization * ne * dt);
-    double react_prob_recombination = 1.0 - exp(-rateResults.recombination * ne * dt);
-
-    
-    double seed_ionization = dis(gen2);
-    double seed_recombination = dis(gen2);
-
-    if (react_prob_ioniziation > seed_ionization && react_prob_ioniziation > 0) {
-        if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
-            p->ispecies = sp - 1;
-        }
-    }
-
-    if (react_prob_recombination > seed_recombination && react_prob_recombination > 0) {
-        if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
-            p->ispecies = sp + 1;
-        }
-    }
-    // Handle special case
-    if (material == W && species[sp].charge == 1.0) {
-        printf("Ionization event for W and charge 1\n");
-        exit(0);
-    }
-}
-
-
-
-// struct Coeffs {
-//     double A, B, C;
-
-//     double evaluate(double te) const {
-//         return A + B * std::pow(std::log10(te), C);
-//     }
-// };
-
-// using InnerMap = std::unordered_map<int, Coeffs>;
-// using CoeffMap = std::unordered_map<int, InnerMap>;
-
-// CoeffMap W_coeffs = {
-//     {0, {
-//         {0, {-16.69, 3, 0.13}},  // 0 = Ionization 16.69, -3, -21.13
-//         {1, {-100, -100, -100}}  // 1 = Recombination
-//     }},
-//     {1, {
-//     {0, {-20.69, 5, 0.11}},
-//     {1, {0,0,0}}
-// }}
-// };
-
-// CoeffMap O_coeffs = {
-//         {0, {
-//             {0, {-11.000141363552265, -1.0510339165884202, -3.622348302690982}},
-//             {1, {-0, 0.0, -0.0}}
-//         }},
-//         {1, {
-//             {0, {-12.368136131010594, -2.1777021011973616, -2.8567139276944435}},
-//             {1, {-18.82196696, 0.0, -23.710129736773723}}
-//         }},
-//         {2, {
-//             {0, {-12.616190850260509, -3.0916202503009442, -2.727552688614829}},
-//             {1, {-18.29430352, 0.0, -23.059588740064672}}
-//         }},
-//         {3, {
-//             {0, {-13.90279224352597, -4.183069099625667, -2.722796506539563}},
-//             {1, {-17.95310889, 0.0, -21.133400540458975}}
-//         }},
-//         {4, {
-//             {0, {-14.163380013235688, -5.7387979619760605, -2.657673222397221}},
-//             {1, {-18.08186143, 0.0, -20.608874662133772}}
-//         }},
-//         {5, {
-//             {0, {-14.486275653510111, -6.925518861771674, -2.6074112261268128}},
-//             {1, {-17.63747946, 0.0, -10.115829199191404}}
-//         }},
-//         {6, {
-//             {0, {-14.293063724600586, -34.47373937557263, -2.790750783687045}},
-//             {1, {-17.65926967, 0.0, -13.83011094837326}}
-//         }},
-//         {7, {
-//             {0, {-14.542621982846471, -40.0, -2.808383162715444}},
-//             {1, {-18.101651920000002, 0.0, -21.058124050479435}}
-//         }},
-//         {8, {
-//             {0, {0,0,0}},
-//             {1, {-18.101651920000002, 0.0, -21.058124050479435}}
-//         }}
-// };
-
-
-// double Collide::getRate(const std::string &material, int charge, int reactionType, double te) const {
-//     if (material == "W") {
-//         if (W_coeffs.count(charge) && W_coeffs[charge].count(reactionType)) {
-//             return W_coeffs[charge][reactionType].evaluate(te);
-//         }
-//         else {
-//             printf("Rate not implemented for tungsten charge state %d\n", charge);
-//             exit(0);
-//         }
-//     }
-//     else if (material == "O") {
-//         if (O_coeffs.count(charge) && O_coeffs[charge].count(reactionType)) {
-//             return O_coeffs[charge][reactionType].evaluate(te);
-//         }
-//         else {
-//             printf("Rate not implemented for oxygen charge state %d\n", charge);
-//             exit(0);
-//         }
-//     }
-//     else 
-//     {
-//         printf("Material and/or charge not implemented  %s %d\n", material.c_str() , charge);
+// int Collide::getMaxChargeNumber(double molwt)
+// {
+//     if (molwt == 16.0) {
+//         return 8;  // for Oxygen
+//     } else if (molwt == 184.0) {
+//         return 74;  // for Tungsten
+//     } else {
+//         printf("Invalid species mass\n");
 //         exit(0);
+//     }
+//     return 0;  // Should not reach here
+// }
+
+
+// bool Collide::validateSpeciesChange(double molwt, int sp, int direction) {
+//     if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
+//                           (direction == 1 && sp >= 0 && sp <= 6))) {
+//                             // printf("Valid species change\n");
+//         return true;
+//     } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
+//         return true;
+//     }
+//     return false;
+// }
+
+// enum Material { W = 184, O = 16, INVALID = -1 };
+
+// std::map<Material, RateData> rateDataCache;
+
+// std::string getMaterialName(Material material) {
+//     switch (material) {
+//         case W: return "W";
+//         case O: return "O";
+//         default: return "INVALID";
 //     }
 // }
 
+
+// void Collide::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
+//     Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
+
+//     // Ensure we have a valid material
+//     if (material != W && material != O) {
+//         printf("Invalid species mass\n");
+//         exit(0);
+//     }
+
+//     // Load rate data only if not already cached
+//     if (rateDataCache.find(material) == rateDataCache.end()) {
+//         std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
+//         rateDataCache[material] = readRateData(filename);
+//     }
+
+//     RateData& rateData = rateDataCache[material];
+//     double charge = species[sp].charge;
+
+//     // Convert te and ne to log10
+//     double log10_te = log10(te);
+//     double log10_ne = log10(ne);
+
+//     double dt = update->dt;
+
+//     RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
+//     double ionization_rate = pow(10, rateResults.ionization);
+//     double recombination_rate = pow(10, rateResults.recombination);
+
+//     double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
+//     double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
+
+//     // Bound the values
+//     react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
+//     react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
+
+//     double seed_ionization = dis(gen2);
+//     double seed_recombination = dis(gen2);
+
+//     if (react_prob_ioniziation > seed_ionization) {
+//         if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
+//             p->ispecies = sp - 1;
+//         }
+//     } else if (react_prob_recombination > seed_recombination) {
+//         if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
+//             p->ispecies = sp + 1;
+//         }
+//     }
+
+//     if (material == W && charge == 5.0) {
+//         p->ispecies = sp;
+//     }
+// }

@@ -43,15 +43,18 @@ struct RateData {
 
 };
 
+RateResults interpolateRateDataRecombination(double charge, double te, double ne, const RateData& rateData, std::string material);
+    
+RateResults interpolateRateDataIonization(double charge, double te, double ne, const RateData& rateData, std::string material);
+ 
+
+RateResults interpolateRates(double charge, double te, double ne, const RateData& rateData, std::string material);
+
 std::vector<float> read1DDataSet(const H5::H5File& file, const std::string& datasetPath);
 
 RateData readRateData(const std::string& filePath);
 RateData readRateDataOnce(const std::string& filename);
 
-double computeRate(const std::vector<float>& rateGrid_Temp,
-                       const std::vector<float>& rateGrid_Dens,
-                       const std::vector<std::vector<float>>& Rates,
-                       double te, double ne, std::string material);
 
 RateResults interpolateRateData(int charge, double te, double ne, const RateData rateData, std::string material);
 
