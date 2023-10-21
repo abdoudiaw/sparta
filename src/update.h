@@ -277,14 +277,14 @@ PlasmaParams interpolate(const PlasmaData2& lower, const PlasmaData2& upper, dou
 //     z_double.assign(plasma_data.z.begin(), plasma_data.z.end());
 // }
 
-  int getMaxChargeNumber(double );
-  bool validateSpeciesChange(double , int , int );
+//   int getMaxChargeNumber(double );
+//   bool validateSpeciesChange(double , int , int );
 
-  void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
-  double te, double ne); //, RateData &rateData);
+//   void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+//   double te, double ne); //, RateData &rateData);
 
 
-void getNeighboringPoints(const Point& closestPoint, Point& previousPoint, Point& nextPoint, const std::vector<Point>& points) const;
+// void getNeighboringPoints(const Point& closestPoint, Point& previousPoint, Point& nextPoint, const std::vector<Point>& points) const;
 
     // double potential_brooks(double , double , double , double , double, double ) const ;
     // double potential_brooks(double minDistance, double alpha, PlasmaParams params) const;
@@ -431,9 +431,9 @@ std::array<double, 3> potential_brooks(double *xc, const PlasmaParams params) co
 
   //
 
-//   void pusher_boris3D(double *, double *, double *, double *, double , double , double , PlasmaParams);
 //   void pusher_boris3D(double *xc, double *x, double *v, double *xnew, double charge, double mass, double dt, PlasmaParams params,  double *E, double *B);
     void pusher_boris2D(double *, double *, double *, double *, double , double , double, double *, double *);
+    void pusher_boris3D(double *, double *, double *, double *, double , double , double, double *, double *);
 
    std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file
 

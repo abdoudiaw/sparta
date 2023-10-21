@@ -1,0 +1,112 @@
+
+def parse_file(filename):
+    results = {}
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.startswith("ITEM: TIMESTEP"):
+                timestep = int(lines[i+1].strip())
+                number_of_cells = int(lines[i+3].strip())
+                xcs = []
+                ycs  = []
+                density_values_oii = []
+                density_values_w  = []
+                for j in range(number_of_cells):
+                    cell_data_index = i + 5 + j
+                    if cell_data_index >= len(lines):  # Check to avoid going out of bounds
+                        break
+                    cell_data_line = lines[cell_data_index]
+                    cell_data = cell_data_line.split()
+                    if len(cell_data) < 4:  # Ensure we have enough data in the line
+                        continue
+                    try:
+                        xc = float(cell_data[1])
+                        yc = float(cell_data[2])
+                        density_oii = float(cell_data[3])  # 10 O+ -1 W
+                        print(xc, yc, density_oii)
+                        density_w = float(cell_data[-1])  # 10 O+ -1 W
+                        xcs.append(xc)
+                        ycs.append(yc)
+                        density_values_oii.append(density_oii)
+                        density_values_w.append(density_w)
+                    except ValueError:
+                        # Skip if not a valid float
+                        continue
+                results[timestep] = (xcs, ycs, density_values_oii, density_values_w)
+    return results
+
+
+
+#import matplotlib.pyplot as plt
+#
+data = parse_file("tmp.grid")
+
+import numpy as np
+import matplotlib.pyplot as plt
+#
+#for timestep, (xcs, ycs, densities_oii, density_w) in data.items():
+#    if timestep == 0:  # Skip timestep 0
+#        continue
+last_timestep = max(data.keys())
+if last_timestep != 0:  # Ensure it's not the zero timestep you wanted to skip
+    xcs, ycs, densities_oii, density_w = data[last_timestep]
+#    print(np.unique(density_w))
+#    exit()
+
+#    fig, (ax1, ax2, ax3, ax4) = plt.subplots(2, 2, figsize=(6, 10))
+    fig, ((ax1, ax3), (ax2, ax4)) = plt.subplots(2, 2, figsize=(12, 10))
+
+    # Sort ycs and densities based on ycs values
+    sorted_indices = sorted(range(len(ycs)), key=lambda k: ycs[k])
+    ycs_sorted = [ycs[i] for i in sorted_indices]
+    densities_oii_sorted = [densities_oii[i] for i in sorted_indices]
+    densities_w_sorted = [density_w[i] for i in sorted_indices]
+
+    ax1.plot(ycs_sorted, densities_oii_sorted, 'b')  # 'ko-' means black circles connected with lines
+
+
+    # Filter out zero densities for oii
+    non_zero_indices_oii = [i for i, density in enumerate(densities_oii_sorted) if density != 0]
+    ycs_oii_non_zero = [ycs_sorted[i] for i in non_zero_indices_oii]
+    densities_oii_non_zero = [densities_oii_sorted[i] for i in non_zero_indices_oii]
+
+    # Filter out zero densities for w
+    non_zero_indices_w = [i for i, density in enumerate(densities_w_sorted) if density != 0]
+    ycs_w_non_zero = [ycs_sorted[i] for i in non_zero_indices_w]
+    densities_w_non_zero = [densities_w_sorted[i] for i in non_zero_indices_w]
+    print(densities_w_non_zero)
+
+
+    ax1.plot(ycs_oii_non_zero, densities_oii_non_zero, 'k', marker='o')  # black lines connecting non-zero points
+    ax3.plot(ycs_w_non_zero, densities_w_non_zero, 'k', marker='o')  # red lines connecting non-zero points for densities_w (assuming you want to plot it in red)
+
+
+#    ax1.set_ylim(1e10, max(densities_oii_non_zero)*1.1)  # Uncomment if you need this xlim
+#    ax1.set_xlim(-1,0.75)
+
+    ax1.set_title(f'OII: {last_timestep}' )
+    ax1.set_xlabel('Z[m]')
+    ax1.set_ylabel('Density')
+    ax1.grid(alpha=0.3)
+
+    # 2D Plot
+    # Convert the data to a structured 2D grid
+    x = np.unique(xcs)
+    y = np.unique(ycs)
+    density_grid_oii = np.zeros((len(y), len(x)))
+
+    for i, (xc, yc, density_oii) in enumerate(zip(xcs, ycs, densities_oii)):
+        j = np.where(x == xc)[0]
+        k = np.where(y == yc)[0]
+        density_grid_oii[k, j] = density_oii
+
+    pcm = ax2.pcolormesh(x, y, density_grid_oii, shading='auto')  # 'shading' is set to 'auto' to eliminate warning in newer matplotlib versions
+    fig.colorbar(pcm, ax=ax2, label='Density')
+    ax2.set_xlabel('R[m]')
+    ax2.set_ylabel('Z[m')
+
+
+    plt.tight_layout()
+    plt.show()
+
+

@@ -652,12 +652,12 @@ template < int NEARCP > void Collide::collisions_group()
     std::chrono::high_resolution_clock::time_point t1, t2;
     std::chrono::duration<double> duration;
 
-    t1 = std::chrono::high_resolution_clock::now();  // Start the total process timer
+    // t1 = std::chrono::high_resolution_clock::now();  // Start the total process timer
 
   int step = update->ntimestep;
-  // printf("step: %d\n", step);
-  // if (step % 1000 == 0) { 
-    // printf("step: %d\n", step);
+  // // printf("step: %d\n", step);
+  if (step % 100 == 0) { 
+  //   printf("step: %d\n", step);
 
     // 2. Start your loop
     for (int ip = 0; ip < particle->nlocal; ip++) {
@@ -683,14 +683,18 @@ template < int NEARCP > void Collide::collisions_group()
           // 5. Continue with your existing code
           double te = params.temp_e;
           double ne = params.dens_e;
-          std::chrono::high_resolution_clock::time_point t_interpolate_start = std::chrono::high_resolution_clock::now();
-
-          // process_particle(ipart, species, ispecies, te, ne);
+          // std::chrono::high_resolution_clock::time_point t_interpolate_start = std::chrono::high_resolution_clock::now();
+          // printf("te: %f, ne: %f\n", te, ne);
+          process_particle(ipart, species, ispecies, te, ne);
     
     }
 }
 
-// }
+    // GET time
+    // t2 = std::chrono::high_resolution_clock::now();
+    // double total_time = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1).count() / 1000000.;
+    // printf("Total time: %g\n", total_time);
+}
 
 
 /* ----------------------------------------------------------------------
@@ -1887,93 +1891,112 @@ void Collide::set_nn_group(int n)
 }
 
 
-// int Collide::getMaxChargeNumber(double molwt)
-// {
-//     if (molwt == 16.0) {
-//         return 8;  // for Oxygen
-//     } else if (molwt == 184.0) {
-//         return 74;  // for Tungsten
-//     } else {
-//         printf("Invalid species mass\n");
-//         exit(0);
-//     }
-//     return 0;  // Should not reach here
-// }
+int Collide::getMaxChargeNumber(double molwt)
+{
+    if (molwt == 16.0) {
+        return 8;  // for Oxygen
+    } else if (molwt == 184.0) {
+        return 74;  // for Tungsten
+    } else {
+        printf("Invalid species mass\n");
+        exit(0);
+    }
+    return 0;  // Should not reach here
+}
 
 
-// bool Collide::validateSpeciesChange(double molwt, int sp, int direction) {
-//     if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
-//                           (direction == 1 && sp >= 0 && sp <= 6))) {
-//                             // printf("Valid species change\n");
-//         return true;
-//     } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
-//         return true;
-//     }
-//     return false;
-// }
+bool Collide::validateSpeciesChange(double molwt, int sp, int direction) {
+    if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
+                          (direction == 1 && sp >= 0 && sp <= 6))) {
+                            // printf("Valid species change\n");
+        return true;
+    } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
+        return true;
+    }
+    return false;
+}
 
-// enum Material { W = 184, O = 16, INVALID = -1 };
+enum Material { W = 184, O = 16, INVALID = -1 };
 
-// std::map<Material, RateData> rateDataCache;
+std::map<Material, RateData> rateDataCache;
 
-// std::string getMaterialName(Material material) {
-//     switch (material) {
-//         case W: return "W";
-//         case O: return "O";
-//         default: return "INVALID";
-//     }
-// }
+std::string getMaterialName(Material material) {
+    switch (material) {
+        case W: return "W";
+        case O: return "O";
+        default: return "INVALID";
+    }
+}
 
 
-// void Collide::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
-//     Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
+void Collide::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
+    Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
 
-//     // Ensure we have a valid material
-//     if (material != W && material != O) {
-//         printf("Invalid species mass\n");
-//         exit(0);
-//     }
+    // time this calculation
+    //  std::chrono::high_resolution_clock::time_point t1, t2;
+    // std::chrono::duration<double> duration;
 
-//     // Load rate data only if not already cached
-//     if (rateDataCache.find(material) == rateDataCache.end()) {
-//         std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
-//         rateDataCache[material] = readRateData(filename);
-//     }
+    // t1 = std::chrono::high_resolution_clock::now();  // Start the total process timer
 
-//     RateData& rateData = rateDataCache[material];
-//     double charge = species[sp].charge;
+    // auto start = std::chrono::high_resolution_clock::now();
 
-//     // Convert te and ne to log10
-//     double log10_te = log10(te);
-//     double log10_ne = log10(ne);
+    
+    // Ensure we have a valid material
+    if (material != W && material != O) {
+        printf("Invalid species mass\n");
+        exit(0);
+    }
 
-//     double dt = update->dt;
+    // Load rate data only if not already cached
 
-//     RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
-//     double ionization_rate = pow(10, rateResults.ionization);
-//     double recombination_rate = pow(10, rateResults.recombination);
+    if (rateDataCache.find(material) == rateDataCache.end()) {
+        std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
+        rateDataCache[material] = readRateData(filename);
+    }
 
-//     double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
-//     double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
+    RateData& rateData = rateDataCache[material];
+    double charge = species[sp].charge;
 
-//     // Bound the values
-//     react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
-//     react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
+    // Convert te and ne to log10
+    double log10_te = log10(te);
+    double log10_ne = log10(ne);
 
-//     double seed_ionization = dis(gen2);
-//     double seed_recombination = dis(gen2);
+    double dt = update->dt;
 
-//     if (react_prob_ioniziation > seed_ionization) {
-//         if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
-//             p->ispecies = sp - 1;
-//         }
-//     } else if (react_prob_recombination > seed_recombination) {
-//         if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
-//             p->ispecies = sp + 1;
-//         }
-//     }
+    RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
+    double ionization_rate = pow(10, rateResults.ionization);
+    double recombination_rate = pow(10, rateResults.recombination);
 
-//     if (material == W && charge == 5.0) {
-//         p->ispecies = sp;
-//     }
-// }
+    double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
+    double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
+
+
+    // Bound the values
+    react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
+    react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
+
+    double seed_ionization = dis(gen2);
+    double seed_recombination = dis(gen2);
+    // print the values
+    // printf("te: %g, ne: %g, ionization_rate: %g, recombination_rate: %g, react_prob_ioniziation: %g, react_prob_recombination: %g, seed_ionization: %g, seed_recombination: %g\n", te, ne, ionization_rate, recombination_rate, react_prob_ioniziation, react_prob_recombination, seed_ionization, seed_recombination);
+    if (react_prob_ioniziation > seed_ionization) {
+      // printf("Ionization\n");
+        if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
+            p->ispecies = sp - 1;
+        }
+    } else if (react_prob_recombination > seed_recombination) {
+      // printf("Recombination\n");
+        if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
+            p->ispecies = sp + 1;
+        }
+    }
+
+    if (material == W && charge == 5.0) {
+        p->ispecies = sp;
+    }
+        auto stop = std::chrono::high_resolution_clock::now();
+
+   // Calculate the duration and print it
+    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    // printf("Time taken for calculation: %lld microseconds\n", duration.count());
+}

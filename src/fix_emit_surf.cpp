@@ -496,12 +496,15 @@ void FixEmitSurf::perform_task()
 
     if (subsonic_style == PONLY) vscale = tasks[i].vscale;
     else vscale = particle->mixture[imix]->vscale;
+
     if (!normalflag) indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
                        vstream[2]*normal[2];
 
     // perspecies yes
 
     if (perspecies) {
+  
+
       for (isp = 0; isp < nspecies; isp++) {
         ispecies = species[isp];
         ntarget = tasks[i].ntargetsp[isp]+random->uniform();
@@ -562,9 +565,35 @@ void FixEmitSurf::perform_task()
             vbmag = vr * cos(theta) + MathExtra::dot3(vstream,btan);
           }
 
-          v[0] = vnmag*normal[0] + vamag*atan[0] + vbmag*btan[0];
-          v[1] = vnmag*normal[1] + vamag*atan[1] + vbmag*btan[1];
-          v[2] = vnmag*normal[2] + vamag*atan[2] + vbmag*btan[2];
+          // use position x, y to call interpolatePlasma to get parallel velocity vpar and Bx,By,Bz
+          // project vpar to vparx, vpary, vparz
+          // set particle velocity v[0], v[1], v[2] = vparx, vpary, vparz
+
+          PlasmaParams params = update->interpolatePlasmaData( x[0], x[1]);
+          double Bfield[3];
+          Bfield[0] = params.b_r ;
+          Bfield[1] = params.b_z;
+          Bfield[2] = params.b_phi;
+          double flow = params.parr_flow;
+          // project vpar to vparx, vpary, vparz
+          double Bmag = sqrt(Bfield[0]*Bfield[0] + Bfield[1]*Bfield[1] + Bfield[2]*Bfield[2]);
+          if (Bmag == 0.0) {
+                    // // 
+              v[0] = vnmag*normal[0] + vamag*atan[0] + vbmag*btan[0];
+              v[1] = vnmag*normal[1] + vamag*atan[1] + vbmag*btan[1];
+              v[2] = vnmag*normal[2] + vamag*atan[2] + vbmag*btan[2];
+          } else {
+            double vparx = flow * Bfield[0] / Bmag;
+            double vpary = flow * Bfield[1] / Bmag;
+            double vparz = flow * Bfield[2] / Bmag;
+
+            // set v[0], v[1], v[2] = vparx, vpary, vparz
+            v[0] = vparx;
+            v[1] = vpary;
+            v[2] = vparz;
+          }
+
+          // printf("particle vector: %f %f %f\n", v[0], v[1], v[2]);
 
           erot = particle->erot(ispecies,temp_rot,random);
           evib = particle->evib(ispecies,temp_vib,random);
@@ -588,6 +617,8 @@ void FixEmitSurf::perform_task()
     // perspecies no
 
     } else {
+
+      printf("perspecies no\n");
 
       // set ntarget for insertion mode FLOW, CONSTANT, or VARIABLE
       // for FLOW: ntarget is already set within task

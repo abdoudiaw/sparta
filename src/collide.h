@@ -71,11 +71,11 @@ double getRate(const std::string &material, int charge, int reactionType, double
   virtual void add_grid_one();
   virtual void adapt_grid();
 
-  // int getMaxChargeNumber(double );
-  // bool validateSpeciesChange(double , int , int );
+  int getMaxChargeNumber(double );
+  bool validateSpeciesChange(double , int , int );
 
-  // void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
-  // double te, double ne); //, RateData &rateData);
+  void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+  double te, double ne); //, RateData &rateData);
 
 
   int ngroups;        // # of groups

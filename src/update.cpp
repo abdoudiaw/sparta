@@ -551,7 +551,7 @@ template < int DIM, int SURF, int OPT > void Update::move()
     // / Start the timer just before calling the function
 // auto start_time = std::chrono::high_resolution_clock::now();
 
-process_particle(ipart, species, isp, te, ne);
+// process_particle(ipart, species, isp, te, ne);
 
 // Stop the timer right after the function returns
 // auto end_time = std::chrono::high_resolution_clock::now();
@@ -583,7 +583,6 @@ process_particle(ipart, species, isp, te, ne);
             (this->*moveperturb)(i,particles[i].icell,dtremain,xnew,v);
         }
         else{
-    //       // Apply collisional diffusion
         std::array<double, 3> Efield;
         Efield = potential_brooks(xc, params);
         backgroundCollisions(xc, v, dtremain, species[isp].molwt, species[isp].charge, params);
@@ -2160,60 +2159,60 @@ PlasmaParams Update::interpolatePlasmaData(double r_val, double z_val) {
     return interpolated_data;
 }
 
-// void Update::pusher_boris3D(double *xc, double *x, double *v, double *xnew, double charge, double mass, double dt, double *E, double *B)
-// {
-//       // printf("before xnew and v %g, %g, %g, %g, %g, %g\n", x[0], x[1], x[2], v[0], v[1], v[2]);
+void Update::pusher_boris3D(double *xc, double *x, double *v, double *xnew, double charge, double mass, double dt, double *E, double *B)
+{
+      // printf("before xnew and v %g, %g, %g, %g, %g, %g\n", x[0], x[1], x[2], v[0], v[1], v[2]);
 
 
-//     double v_temp[3] = {v[0], v[1], v[2]};
+    double v_temp[3] = {v[0], v[1], v[2]};
     
-//     const double q_over_2m = charge * dt / (2.0 * mass);
+    const double q_over_2m = charge * dt / (2.0 * mass);
 
-//     // Get Electric Field
-//     // double E[3] = {0, 0, 0};  // Using 0 as placeholders for now. Replace accordingly.
-//     // double B[3] = {0,0,0}; //params.b_r, params.b_phi, params.b_z};
+    // Get Electric Field
+    // double E[3] = {0, 0, 0};  // Using 0 as placeholders for now. Replace accordingly.
+    // double B[3] = {0,0,0}; //params.b_r, params.b_phi, params.b_z};
 
-//     // Half electric field update
-//     v_temp[0] += E[0] * q_over_2m;
-//     v_temp[1] += E[1] * q_over_2m;
-//     v_temp[2] += E[2] * q_over_2m;
+    // Half electric field update
+    v_temp[0] += E[0] * q_over_2m;
+    v_temp[1] += E[1] * q_over_2m;
+    v_temp[2] += E[2] * q_over_2m;
 
-//     // Compute the t-vector for magnetic field rotation
-//     double t[3];
-//     double qom = 0.5 * dt * charge / mass; // charge-to-mass ratio times dt/2
-//     t[0] = qom * B[0];
-//     t[1] = qom * B[1];
-//     t[2] = qom * B[2];
+    // Compute the t-vector for magnetic field rotation
+    double t[3];
+    double qom = 0.5 * dt * charge / mass; // charge-to-mass ratio times dt/2
+    t[0] = qom * B[0];
+    t[1] = qom * B[1];
+    t[2] = qom * B[2];
 
-//     double tsq = t[0] * t[0] + t[1] * t[1] + t[2] * t[2];
+    double tsq = t[0] * t[0] + t[1] * t[1] + t[2] * t[2];
     
-//     // Calculate v-prime (v' = v + v x t)
-//     double vprime[3] = {
-//         v_temp[1] * t[2] - v_temp[2] * t[1] + v_temp[0],
-//         v_temp[2] * t[0] - v_temp[0] * t[2] + v_temp[1],
-//         v_temp[0] * t[1] - v_temp[1] * t[0] + v_temp[2]
-//     };
+    // Calculate v-prime (v' = v + v x t)
+    double vprime[3] = {
+        v_temp[1] * t[2] - v_temp[2] * t[1] + v_temp[0],
+        v_temp[2] * t[0] - v_temp[0] * t[2] + v_temp[1],
+        v_temp[0] * t[1] - v_temp[1] * t[0] + v_temp[2]
+    };
 
-//     // Calculate s-vector (s = 2t / (1 + t^2))
-//     double s[3];
-//     double denom = 1.0 / (1.0 + tsq);
-//     s[0] = 2.0 * t[0] * denom;
-//     s[1] = 2.0 * t[1] * denom;
-//     s[2] = 2.0 * t[2] * denom;
+    // Calculate s-vector (s = 2t / (1 + t^2))
+    double s[3];
+    double denom = 1.0 / (1.0 + tsq);
+    s[0] = 2.0 * t[0] * denom;
+    s[1] = 2.0 * t[1] * denom;
+    s[2] = 2.0 * t[2] * denom;
 
-//     // Update velocity using s (v_new = v' + v' x s)
-//     v[0] = vprime[1] * s[2] - vprime[2] * s[1] + vprime[0] + E[0] * q_over_2m;
-//     v[1] = vprime[2] * s[0] - vprime[0] * s[2] + vprime[1] + E[1] * q_over_2m;
-//     v[2] = vprime[0] * s[1] - vprime[1] * s[0] + vprime[2] + E[2] * q_over_2m;
+    // Update velocity using s (v_new = v' + v' x s)
+    v[0] = vprime[1] * s[2] - vprime[2] * s[1] + vprime[0] + E[0] * q_over_2m;
+    v[1] = vprime[2] * s[0] - vprime[0] * s[2] + vprime[1] + E[1] * q_over_2m;
+    v[2] = vprime[0] * s[1] - vprime[1] * s[0] + vprime[2] + E[2] * q_over_2m;
 
-//     // Update position
-//     xnew[0] = x[0] + v[0] * dt;
-//     xnew[1] = x[1] + v[1] * dt;
-//     xnew[2] = x[2] + v[2] * dt;
+    // Update position
+    xnew[0] = x[0] + v[0] * dt;
+    xnew[1] = x[1] + v[1] * dt;
+    xnew[2] = x[2] + v[2] * dt;
     
-//     // printf("after xnew and v %g, %g, %g, %g, %g, %g\n", x[0], x[1], x[2], v[0], v[1], v[2]);
-//     // exit(0);
-// }
+    // printf("after xnew and v %g, %g, %g, %g, %g, %g\n", x[0], x[1], x[2], v[0], v[1], v[2]);
+    // exit(0);
+}
 
 
 void Update::pusher_boris2D(double *xc, double *x, double *v, double *xnew, double charge, double mass, double dt, double *E, double *B)
@@ -2624,93 +2623,93 @@ double Update::interp2dCombined(double x, double y, double z, int nx, int nz,
 
 
 
-int Update::getMaxChargeNumber(double molwt)
-{
-    if (molwt == 16.0) {
-        return 8;  // for Oxygen
-    } else if (molwt == 184.0) {
-        return 74;  // for Tungsten
-    } else {
-        printf("Invalid species mass\n");
-        exit(0);
-    }
-    return 0;  // Should not reach here
-}
+// int Update::getMaxChargeNumber(double molwt)
+// {
+//     if (molwt == 16.0) {
+//         return 8;  // for Oxygen
+//     } else if (molwt == 184.0) {
+//         return 74;  // for Tungsten
+//     } else {
+//         printf("Invalid species mass\n");
+//         exit(0);
+//     }
+//     return 0;  // Should not reach here
+// }
 
 
-bool Update::validateSpeciesChange(double molwt, int sp, int direction) {
-    if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
-                          (direction == 1 && sp >= 0 && sp <= 6))) {
-                            // printf("Valid species change\n");
-        return true;
-    } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
-        return true;
-    }
-    return false;
-}
+// bool Update::validateSpeciesChange(double molwt, int sp, int direction) {
+//     if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
+//                           (direction == 1 && sp >= 0 && sp <= 6))) {
+//                             // printf("Valid species change\n");
+//         return true;
+//     } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
+//         return true;
+//     }
+//     return false;
+// }
 
-enum Material { W = 184, O = 16, INVALID = -1 };
+// enum Material { W = 184, O = 16, INVALID = -1 };
 
-std::map<Material, RateData> rateDataCache;
+// std::map<Material, RateData> rateDataCache;
 
-std::string getMaterialName(Material material) {
-    switch (material) {
-        case W: return "W";
-        case O: return "O";
-        default: return "INVALID";
-    }
-}
+// std::string getMaterialName(Material material) {
+//     switch (material) {
+//         case W: return "W";
+//         case O: return "O";
+//         default: return "INVALID";
+//     }
+// }
 
 
-void Update::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
-    Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
+// void Update::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
+//     Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
 
-    // Ensure we have a valid material
-    if (material != W && material != O) {
-        printf("Invalid species mass\n");
-        exit(0);
-    }
+//     // Ensure we have a valid material
+//     if (material != W && material != O) {
+//         printf("Invalid species mass\n");
+//         exit(0);
+//     }
 
-    // Load rate data only if not already cached
-    if (rateDataCache.find(material) == rateDataCache.end()) {
-        std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
-        rateDataCache[material] = readRateData(filename);
-    }
+//     // Load rate data only if not already cached
+//     if (rateDataCache.find(material) == rateDataCache.end()) {
+//         std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
+//         rateDataCache[material] = readRateData(filename);
+//     }
 
-    RateData& rateData = rateDataCache[material];
-    double charge = species[sp].charge;
+//     RateData& rateData = rateDataCache[material];
+//     double charge = species[sp].charge;
 
-    // Convert te and ne to log10
-    double log10_te = log10(te);
-    double log10_ne = log10(ne);
+//     // Convert te and ne to log10
+//     double log10_te = log10(te);
+//     double log10_ne = log10(ne);
 
-    double dt = update->dt;
+//     double dt = update->dt;
 
-    RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
-    double ionization_rate = pow(10, rateResults.ionization);
-    double recombination_rate = pow(10, rateResults.recombination);
+//     RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
+//     double ionization_rate = pow(10, rateResults.ionization);
+//     double recombination_rate = pow(10, rateResults.recombination);
 
-    double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
-    double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
+//     double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
+//     double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
 
-    // Bound the values
-    react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
-    react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
+//     // Bound the values
+//     react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
+//     react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
 
-    double seed_ionization = dist(gen);
-    double seed_recombination = dist(gen);
+//     double seed_ionization = dist(gen);
+//     double seed_recombination = dist(gen);
 
-    if (react_prob_ioniziation > seed_ionization) {
-        if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
-            p->ispecies = sp - 1;
-        }
-    } else if (react_prob_recombination > seed_recombination) {
-        if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
-            p->ispecies = sp + 1;
-        }
-    }
+//     if (react_prob_ioniziation > seed_ionization) {
+//         if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
+//             p->ispecies = sp - 1;
+//         }
+//     } else if (react_prob_recombination > seed_recombination) {
+//         if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
+//             p->ispecies = sp + 1;
+//         }
+//     }
 
-    if (material == W && charge == 5.0) {
-        p->ispecies = sp;
-    }
-}
+//     if (material == W && charge == 5.0) {
+//         p->ispecies = sp;
+//     }
+// }

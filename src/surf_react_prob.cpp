@@ -187,8 +187,9 @@ double random_prob = random->uniform();
   //  printf("mass %g\n", mass_incident);
 
     double energy_incident_eV = 0.5 * mass_incident * normVel * joule2ev ; 
-    // double energy_incident_eV =  3.0 * te * charge_incident + 2 * charge_incident * te + 3 * ti ;
-    // printf("energy_incident_eV = %g\n",energy_incident_eV);
+    double energy_incident_eV_2 =  3.0 * te * charge_incident + 2 * charge_incident * te ;
+    energy_incident_eV = energy_incident_eV_2;
+    // printf("energy_incident_eV energy_incident_eV_2 = %g %g\n",energy_incident_eV, energy_incident_eV_2);
 
     // energy_incident = energy_incident_eV; 
     int icell = ip->icell;
@@ -219,10 +220,9 @@ double random_prob = random->uniform();
     }
     // printf("angle_velocity_normal = %g\n",angle_velocity_normal);
 
-    SurfaceDataParams  params2 = interpolateSurfaceData(energy_incident_eV, angle_velocity_normal, species_mass_amu);
+    // SurfaceDataParams  params2 = interpolateSurfaceData(energy_incident_eV, angle_velocity_normal, species_mass_amu);
+      SurfaceDataParams  params2 = interpolateSurfaceData(energy_incident_eV_2, angle_velocity_normal, species_mass_amu);
 
-    double angle_degrees = 0; //angle * 180.0 / M_PI;
-  
   double target_Z1 = 74.;
   double target_M1 = 184.;
   double ion_Z = charge_incident;
@@ -232,12 +232,8 @@ double random_prob = random->uniform();
   double U_S = 2.0; //8.79;
   // printf("tem = %g\n",te);
   double vrm = sqrt(0.5 * update->boltz * U_S * converteV2K / target_M1 / mproton);
-  // double 
   // printf("energy_incident_eV = %g\n",energy_incident_eV);
-
- 
-
-    // get reflection coefficient and sputtering coefficient
+  // get reflection coefficient and sputtering coefficient
   double refl = 0;
   double sput = 0;
     if (energy_incident_eV < 10.0) {
@@ -248,6 +244,7 @@ double random_prob = random->uniform();
       sput = params2.spyld;
     }
     
+    
 
     double reflection_coefficient = refl; //
     double sputtering_coefficient = sput; 
@@ -256,7 +253,8 @@ double random_prob = random->uniform();
 
     double total_coefficient = reflection_coefficient + sputtering_coefficient;
 // printf("total_coefficient = %g\n",total_coefficient);
-// exit(0);
+// printf("reflection_coefficient = %g\n",reflection_coefficient);
+// printf("sputtering_coefficient = %g\n",sputtering_coefficient);
 
 if (total_coefficient == 0.0) {
     // Assuming you want to set both to zero if total_coefficient is zero
@@ -277,15 +275,22 @@ if (total_coefficient == 0.0) {
 }
 
     if (total_coefficient  <=0){
-        // remove particle
-        ip = NULL;
-        return 0;
-        // // set velocity to zero
+      // printf("total_coefficient = %g\n",total_coefficient);
+
+
         // for (int j = 0; j < 3; j++) {
-        // v3[j] = 0.0;
+        //   v3[j] = 0.0;
         // }
         // memcpy(ip->v,v3,3*sizeof(double));
+        // return 0;
+
         
+
+        // remove particle
+        ip = NULL;
+        // printf("removing particle\n");
+        return 0;
+
     }
     else{    
       nsingle++;
@@ -294,8 +299,12 @@ if (total_coefficient == 0.0) {
       switch (r->type) {
        case DISSOCIATION:
         {
+          // printf("sputtering/dissociation\n");
+          // incident species is dissociated into 1 product species
+          // printf("incident species type = %d\n",isp);
           double x[3],v[3];
           ip->ispecies = r->products[0];
+          // printf("product species type = %d\n",ip->ispecies);
           int id = MAXSMALLINT*random->uniform();
           memcpy(x,ip->x,3*sizeof(double));
           memcpy(v,ip->v,3*sizeof(double));
@@ -311,7 +320,25 @@ if (total_coefficient == 0.0) {
       }
     }
     else{
-      ip->ispecies = 8;
+      // get species mass
+      // printf("reflection\n");
+      // incident species mass and charge
+      // printf("incident species id = %d\n",ip->ispecies);
+      double mass = particle->species[ip->ispecies].molwt;
+      // printf("incident mass = %g\n",mass );
+      double charge_i = particle->species[ip->ispecies].charge;
+      // printf("incident charge = %g\n",charge_i);
+      // if mass = 16 then neutralize to oxgyen species 9 and if mass 184 tungsten species 14
+      if (mass == 16.0)
+      { 
+        // printf("neutralizing to oxygen\n");
+        ip->ispecies = 8;
+      }
+      if (mass == 184.0) ip->ispecies = 14;
+      //  printf("reflected species id = %d\n",ip->ispecies);
+      double charge2 = particle->species[ip->ispecies].charge;
+      double mass2 = particle->species[ip->ispecies].molwt  ;
+
       double theta = 2.0 * random->uniform() * M_PI;
       double vtangent = vrm * sqrt(-log(random->uniform()));
       double vx = vtangent * sin(theta);

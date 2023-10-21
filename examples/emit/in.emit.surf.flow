@@ -14,10 +14,11 @@ global              gridcut 0.0 comm/sort yes
 boundary	    o r p
 
 create_box  	    0 10 0 10 -0.5 0.5
-create_grid 	    10 10 1 
+create_grid 	    10 10 1
 balance_grid        rcb cell
 
-global		    nrho 1.0 fnum 0.001
+#global		    nrho 1.0 fnum 0.001
+global            nrho 1e17 fnum 1e11
 
 species		    air.species N O
 mixture		    air N O vstream 10.0 0 0 temp 10.0
@@ -28,15 +29,23 @@ surf_modify         all collide 1
 
 collide             vss air air.vss
 
-fix		    in emit/surf air all perspecies yes
+#fix		    in emit/surf air all perspecies yes
+
+fix            in emit/surf air all  n 1000 nevery 10
+#dump 10 particle all 100 state.*  id type x y z vx vy vz
 
 timestep 	    0.0001
 
-#dump                2 image all 10 image.*.ppm type type pdiam 0.1 &
-#                    surf proc 0.01 size 512 512 zoom 1.75
-#dump_modify	    2 pad 4
+dump                2 image all 10 image.*.ppm type type pdiam 0.1 &
+                    surf proc 0.01 size 512 512 zoom 1.75
+dump_modify	    2 pad 4
 
 fix                 1 balance 10 1.0 rcb part
+
+compute 2 grid all all nrho
+fix 2 ave/grid all 1 10 100 c_2[*]
+dump 3 grid all  100 tmp.grid id xc yc f_2[*]
+
 
 stats		    100
 stats_style	    step cpu np nattempt ncoll nscoll nscheck
