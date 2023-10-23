@@ -124,13 +124,20 @@ if last_timestep != 0:  # Ensure it's not the zero timestep you wanted to skip
         k = np.where(y == yc)[0]
         density_grid_oii[k, j] = density_oii
 
-    pcm = ax2.pcolormesh(x, y, density_grid_oii, shading='auto')  # 'shading' is set to 'auto' to eliminate warning in newer matplotlib versions
-    fig.colorbar(pcm, ax=ax2, label='Density [1/m$^3$]')
+#    pcm = ax2.pcolormesh(x, y, density_grid_oii, shading='auto')  # 'shading' is set to 'auto' to eliminate warning in newer matplotlib versions
+    pcm = ax2.pcolormesh(x, y, density_grid_oii, shading='auto', cmap='plasma')  # You can replace 'viridis' with other colormaps like 'plasma', 'inferno', 'magma', etc.
+#    ax2.set_xlim([x.min(), x.])
+#    ax2.set_ylim([ymin, ymax])
+    ax2.tick_params(direction='out', length=6, width=2, colors='black', grid_color='gray', grid_alpha=0.5)
+
+
+#    fig.colorbar(pcm, ax=ax2, label='Density [1/m$^3$]')
+    cbar = fig.colorbar(pcm, ax=ax2, label='Density [1/m$^{-3}$]')
+    cbar.ax.tick_params(labelsize=10)  # Change tick font size
+
     ax2.set_xlabel('R [m]')
     ax2.set_ylabel('Z [m]')
 
 
     plt.tight_layout()
     plt.show()
-
-
