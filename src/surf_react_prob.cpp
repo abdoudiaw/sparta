@@ -300,8 +300,16 @@ if (total_coefficient == 0.0) {
        case DISSOCIATION:
         {
           // printf("sputtering/dissociation\n");
-          // incident species is dissociated into 1 product species
+        
+          // // incident species is dissociated into 1 product species
           // printf("incident species type = %d\n",isp);
+          // printf("energy of incident particle = %g\n",energy_incident_eV);
+          // printf("angle of incident particle = %g\n",angle_velocity_normal);
+          // printf("mass of incident particle = %g\n",species_mass_amu);
+          // // print charge
+          // printf("charge of incident particle = %g\n",charge_incident);
+          // // print te
+          // printf("te = %g\n",te);
           double x[3],v[3];
           ip->ispecies = r->products[0];
           // printf("product species type = %d\n",ip->ispecies);

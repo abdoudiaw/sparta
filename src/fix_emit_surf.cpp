@@ -618,7 +618,7 @@ void FixEmitSurf::perform_task()
 
     } else {
 
-      printf("perspecies no\n");
+//      printf("perspecies no\n");
 
       // set ntarget for insertion mode FLOW, CONSTANT, or VARIABLE
       // for FLOW: ntarget is already set within task
