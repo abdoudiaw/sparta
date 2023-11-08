@@ -33,11 +33,12 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};  // other react files
-enum{ARRHENIUS,QUANTUM,COULOMB};                               // other react files
+enum{ARRHENIUS,QUANTUM};                               // other react files
 
 #define MAXREACTANT 2
 #define MAXPRODUCT 3
 #define MAXCOEFF 7               // 5 in file, extra for pre-computation
+#define MAXCOEFF 8               // 5 in file, extra for pre-computation
 
 #define MAXLINE 1024
 #define DELTALIST 16
@@ -113,7 +114,6 @@ void ReactBird::init()
   // convert species IDs to species indices
   // flag reactions as active/inactive depending on whether all species exist
   // mark recombination reactions inactive if recombflag_user = 0
-    printf("Initializing bird!\n");
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *r = &rlist[m];
@@ -235,7 +235,6 @@ void ReactBird::init()
     double omega = collide->extract(isp,jsp,"omega");
     double tref = collide->extract(isp,jsp,"tref");
 
-
     // double pre_ave_vibdof = (species[isp].vibdof + species[jsp].vibdof)/2.0;
     double mr = species[isp].mass * species[jsp].mass /
         (species[isp].mass + species[jsp].mass);
@@ -254,43 +253,44 @@ void ReactBird::init()
       tgamma(z+2.5-omega) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5));
     double c2 = r->coeff[3] - 1.0 + omega;
 
-    r->coeff[2] = c1;
-    r->coeff[3] = c2;
-    r->coeff[5] = z + 1.5 - omega;
+    // r->coeff[2] = c1;
+    // r->coeff[3] = c2;
+    // r->coeff[5] = z + 1.5 - omega;
 
-    // add additional coeff for post-collision effective omega
-    // mspec = post-collision species of the particle
-    // aspec = post-collision species of the atom
+    // // add additional coeff for post-collision effective omega
+    // // mspec = post-collision species of the particle
+    // // aspec = post-collision species of the atom
 
-    double momega,aomega;
+    // double momega,aomega;
 
-    if (r->nproduct > 1) {
-      int mspec = r->products[0];
-      int aspec = r->products[1];
+    // if (r->nproduct > 1) {
+    //   int mspec = r->products[0];
+    //   int aspec = r->products[1];
 
-      if (species[mspec].rotdof < 2.0) {
-        mspec = r->products[1];
-        aspec = r->products[0];
-      }
+    //   if (species[mspec].rotdof < 2.0) {
+    //     mspec = r->products[1];
+    //     aspec = r->products[0];
+    //   }
 
-      int ncount = 0;
-      if (mspec >= 0) {
-        momega = collide->extract(mspec,mspec,"omega");
-        ncount++;
-      } else momega = 0.0;
-      if (aspec >= 0) {
-        aomega = collide->extract(aspec,aspec,"omega");
-        ncount++;
-      } else aomega = 0.0;
+    //   int ncount = 0;
+    //   if (mspec >= 0) {
+    //     momega = collide->extract(mspec,mspec,"omega");
+    //     ncount++;
+    //   } else momega = 0.0;
+    //   if (aspec >= 0) {
+    //     aomega = collide->extract(aspec,aspec,"omega");
+    //     ncount++;
+    //   } else aomega = 0.0;
 
-      r->coeff[6] = (momega+aomega) / ncount;
+    //   r->coeff[6] = (momega+aomega) / ncount;
 
-    } else {
-      int mspec = r->products[0];
-      momega = collide->extract(mspec,mspec,"omega");
-      r->coeff[6] = momega;
-    }
+    // } else {
+    //   int mspec = r->products[0];
+    //   momega = collide->extract(mspec,mspec,"omega");
+    //   r->coeff[6] = momega;
+    // }
   }
+
   // set recombflag = 0/1 if any recombination reactions are defined & active
   // check for user disabling them is at top of this method
 
@@ -301,6 +301,7 @@ void ReactBird::init()
   }
 
   if (!recombflag) return;
+
   // count how many IJ pairs have a recombination reaction
   // allocate sp2recomb_ij = contiguous list of reactions
   //   for all species for each IJ pair that has a recombination reaction
@@ -404,7 +405,6 @@ void ReactBird::init()
         }
       }
     }
-  printf("Finished initializing bird!\n");
 }
 
 /* ----------------------------------------------------------------------
@@ -477,40 +477,23 @@ void ReactBird::ambi_check()
     // ionization with 3 products must match this
     // I: A + e -> A+ + e + e
 
-    // else if (r->type == IONIZATION && r->nproduct == 3) {
-    //   if (r->nreactant == 2 && r->nproduct == 3) {
-    //     if (ions[r->reactants[0]] == 0 && r->reactants[1] == especies &&
-    //         ions[r->products[0]] == 1 && r->products[1] == especies &&
-    //         r->products[2] == especies) flag = 0;
-    //   }
-    // }
-
-    // // ionization with 2 products must match this
-    // // I: A + B -> AB+ + e
-
-    // else if (r->type == IONIZATION && r->nproduct == 2) {
-    //   if (r->nreactant == 2 && r->nproduct == 2) {
-    //     if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 0 &&
-    //         ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
-    //   }
-    // }
-
-    // else if (r->type == IONIZATION && r->nproduct == 1) {
-    //   if (r->nreactant == 2 && r->nproduct == 1) {
-    //     if (ions[r->reactants[0]] == 0 &&
-    //         ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
-    //   }
-    // }
-    // Ionization with one reactant and one product
-    else if (r->type == IONIZATION && r->nproduct == 1) {
-      if (r->nreactant == 1) {
-        if (ions[r->reactants[0]] == 0 && r->reactants[0] == especies &&
-            ions[r->products[0]] == 1 && r->products[0] == especies) {
-          flag = 0;
-        }
+    else if (r->type == IONIZATION && r->nproduct == 3) {
+      if (r->nreactant == 2 && r->nproduct == 3) {
+        if (ions[r->reactants[0]] == 0 && r->reactants[1] == especies &&
+            ions[r->products[0]] == 1 && r->products[1] == especies &&
+            r->products[2] == especies) flag = 0;
       }
     }
 
+    // ionization with 2 products must match this
+    // I: A + B -> AB+ + e
+
+    else if (r->type == IONIZATION && r->nproduct == 2) {
+      if (r->nreactant == 2 && r->nproduct == 2) {
+        if (ions[r->reactants[0]] == 0 && ions[r->reactants[1]] == 0 &&
+            ions[r->products[0]] == 1 && r->products[1] == especies) flag = 0;
+      }
+    }
 
     // exchange must match one of these
     // E: AB+ + e -> A + B
@@ -693,8 +676,7 @@ void ReactBird::readfile(char *fname)
         error->all(FLERR,"Invalid exchange reaction");
       }
     } else if (r->type == IONIZATION) {
-      printf("IONIZATION\n");
-      if (r->nreactant != 1 || (r->nproduct != 1 )) {
+      if (r->nreactant != 2 || (r->nproduct != 2 && r->nproduct != 3)) {
         print_reaction(copy1,copy2);
         error->all(FLERR,"Invalid ionization reaction");
       }
@@ -712,13 +694,12 @@ void ReactBird::readfile(char *fname)
     }
     if (word[0] == 'A' || word[0] == 'a') r->style = ARRHENIUS;
     else if (word[0] == 'Q' || word[0] == 'q') r->style = QUANTUM;
-    else if (word[0] == 'C' || word[0] == 'c') r->style = COULOMB;
     else {
       print_reaction(copy1,copy2);
       error->all(FLERR,"Invalid reaction style in file");
     }
 
-    if (r->style == ARRHENIUS || r->style == QUANTUM || r->style == COULOMB) r->ncoeff = 5;
+    if (r->style == ARRHENIUS || r->style == QUANTUM) r->ncoeff = 6;
 
     for (int i = 0; i < r->ncoeff; i++) {
       word = strtok(NULL," \t\n\r");
@@ -837,7 +818,6 @@ void ReactBird::print_reaction(char *line1, char *line2)
 
 void ReactBird::print_reaction(OneReaction *r)
 {
-  printf(" printing reaction\n");
   if (comm->me) return;
   printf("Bad reaction:\n");
 
@@ -846,12 +826,10 @@ void ReactBird::print_reaction(OneReaction *r)
   else if (r->type == EXCHANGE) type = 'E';
   else if (r->type == IONIZATION) type = 'I';
   else if (r->type == RECOMBINATION) type = 'R';
- 
 
   char style;
   if (r->style == ARRHENIUS) style = 'A';
   else if (r->style == QUANTUM) style = 'Q';
-  else if (r->style == COULOMB) style = 'C';
 
   if (r->nproduct == 1)
     printf("  %c %c: %s + %s --> %s\n",type,style,
@@ -875,7 +853,6 @@ void ReactBird::print_reaction(OneReaction *r)
 void ReactBird::print_reaction_ambipolar(OneReaction *r)
 {
   if (comm->me) return;
-  printf("check ambipolar reaction:\n");
   printf("Bad ambipolar reaction format:\n");
   printf("  type %d style %d\n",r->type,r->style);
   printf("  nreactant %d:",r->nreactant);

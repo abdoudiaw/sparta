@@ -28,26 +28,6 @@
 #include "random_knuth.h"
 #include "memory.h"
 #include "error.h"
-#include <set>
-#include <list>
-#include <map>
-#include <fstream>
-#include "adasRatesInterpolator.h"
-#include "collide_vss.h"
-#include <unordered_map>
-#include <tuple>
-#include <cmath>
-#include <string>
-
-
-#include <random>
-
-std::random_device rd2;  // Seed generator
-std::mt19937 gen2(rd2()); // Mersenne Twister RNG
-std::uniform_real_distribution<> dis(0.0, 1.0); // Uniform distribution between 0 and 1
-
-// double randomValue = dis(gen);
-
 
 using namespace SPARTA_NS;
 
@@ -60,21 +40,10 @@ enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
 
 #define BIG 1.0e20
 
-std::map<double, std::string> speciesFilenames = {
-    {16.0, "data/ADAS_Rates_O.h5"},
-    {184.0, "data/ADAS_Rates_W.h5"}
-};
-
-
-std::map<int, RateData> massRateDataMap; // mapping from mass to its RateData
-
 /* ---------------------------------------------------------------------- */
 
 Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
 {
-
-  //  initialize_coefficients();
-
   int n = strlen(arg[0]) + 1;
   style = new char[n];
   strcpy(style,arg[0]);
@@ -508,12 +477,9 @@ template < int NEARCP > void Collide::collisions_one()
     }
 
     ip = cinfo[icell].first;
-    // printf("icell %d np %d\n",icell,np);
-    // print weight  and volume
-    // printf("weight % volume %g\n",cinfo[icell].weight,cinfo[icell].volume);
     volume = cinfo[icell].volume / cinfo[icell].weight;
-    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
-
+//    if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+      if (volume == 0.0) continue;
     // setup particle list for this cell
 
     if (np > npmax) {
@@ -628,7 +594,6 @@ template < int NEARCP > void Collide::collisions_one()
 
 template < int NEARCP > void Collide::collisions_group()
 {
-  // printf("collisions_group\n");
   int i,j,k,m,n,ii,jj,kk,ip,np,isp,ng;
   int pindex,ipair,igroup,jgroup,newgroup,ngmax;
   int nattempt,reactflag;
@@ -638,64 +603,263 @@ template < int NEARCP > void Collide::collisions_group()
   Particle::OnePart *ipart,*jpart,*kpart;
 
   // loop over cells I own
-  Grid::ChildInfo *cinfo = grid->cinfo;
-  Particle::OnePart *particles = particle->particles;
-  Particle::Species *species = particle->species;
 
-  // Iterate over particles and process them
+  Grid::ChildInfo *cinfo = grid->cinfo;
+
+  Particle::OnePart *particles = particle->particles;
   int *next = particle->next;
   int *species2group = mixture->species2group;
-//    continue;
-  std::unordered_map<int, std::pair<double, double>> cellCenters;
 
-    // Declare timing variables
-    std::chrono::high_resolution_clock::time_point t1, t2;
-    std::chrono::duration<double> duration;
+  for (int icell = 0; icell < nglocal; icell++) {
+    np = cinfo[icell].count;
+    if (np <= 1) continue;
+    ip = cinfo[icell].first;
+    volume = cinfo[icell].volume / cinfo[icell].weight;
+    // if (volume == 0.0) error->one(FLERR,"Collision cell volume is zero");
+    if (volume == 0.0) continue; 
 
-    // t1 = std::chrono::high_resolution_clock::now();  // Start the total process timer
+    // reallocate plist and p2g if necessary
 
-  int step = update->ntimestep;
-  // // printf("step: %d\n", step);
-  // if (step % 10 == 0) { 
-  //   printf("step: %d\n", step);
+    if (np > npmax) {
+      while (np > npmax) npmax += DELTAPART;
+      memory->destroy(plist);
+      memory->create(plist,npmax,"collide:plist");
+      memory->destroy(p2g);
+      memory->create(p2g,npmax,2,"collide:p2g");
+    }
 
-    // 2. Start your loop
-    for (int ip = 0; ip < particle->nlocal; ip++) {
-        Particle::OnePart *ipart = &particles[ip];
-        int ispecies = ipart->ispecies;
-        int particle_mass = species[ispecies].molwt;
-        int icell = ipart->icell;
+    // plist = particle list for entire cell
+    // glist[igroup][i] = index in plist of Ith particle in Igroup
+    // ngroup[igroup] = particle count in Igroup
+    // p2g[i][0] = Igroup for Ith particle in plist
+    // p2g[i][1] = index within glist[igroup] of Ith particle in plist
 
-        // 3. Check the cellCenters cache
-        std::pair<double, double> xc;
-        if (cellCenters.find(icell) == cellCenters.end()) {
-            double *lo = grid->cells[icell].lo;
-            double *hi = grid->cells[icell].hi;
-            xc = {0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1])};
-            cellCenters[icell] = xc;
-        } else {
-            xc = cellCenters[icell];
+    for (i = 0; i < ngroups; i++) ngroup[i] = 0;
+    n = 0;
+
+    while (ip >= 0) {
+      isp = particles[ip].ispecies;
+      igroup = species2group[isp];
+      if (ngroup[igroup] == maxgroup[igroup]) {
+        maxgroup[igroup] += DELTAPART;
+        memory->grow(glist[igroup],maxgroup[igroup],"collide:glist");
+      }
+      ng = ngroup[igroup];
+      glist[igroup][ng] = n;
+      p2g[n][0] = igroup;
+      p2g[n][1] = ng;
+      plist[n] = ip;
+      ngroup[igroup]++;
+      n++;
+      ip = next[ip];
+    }
+
+    if (NEARCP) {
+      ngmax = 0;
+      for (i = 0; i < ngroups; i++) ngmax = MAX(ngmax,ngroup[i]);
+      if (ngmax > max_nn) {
+        realloc_nn(ngmax,nn_last_partner_igroup);
+        realloc_nn(ngmax,nn_last_partner_jgroup);
+      }
+    }
+
+    // attempt = exact collision attempt count for a pair of groups
+    // double loop over N^2 / 2 pairs of groups
+    // nattempt = rounded attempt with RN
+    // NOTE: not using RN for rounding of nattempt
+    // gpair = list of group pairs when nattempt > 0
+
+    npair = 0;
+    for (igroup = 0; igroup < ngroups; igroup++)
+      for (jgroup = igroup; jgroup < ngroups; jgroup++) {
+        attempt = attempt_collision(icell,igroup,jgroup,volume);
+        nattempt = static_cast<int> (attempt);
+
+        if (nattempt) {
+          gpair[npair][0] = igroup;
+          gpair[npair][1] = jgroup;
+          gpair[npair][2] = nattempt;
+          nattempt_one += nattempt;
+          npair++;
+        }
+      }
+
+    // perform collisions for each pair of groups in gpair list
+    // select random particle in each group
+    // if igroup = jgroup, cannot be same particle
+    // test if collision actually occurs
+    // if chemistry occurs, move output I,J,K particles to new group lists
+    // if chemistry occurs, exit attempt loop if group counts become too small
+    // Ni and Nj are pointers to value in ngroup vector
+    //   b/c need to stay current as chemistry occurs
+    // NOTE: OK to use pre-computed nattempt when Ngroup may have changed via react?
+
+    for (ipair = 0; ipair < npair; ipair++) {
+      igroup = gpair[ipair][0];
+      jgroup = gpair[ipair][1];
+      nattempt = gpair[ipair][2];
+
+      ni = &ngroup[igroup];
+      nj = &ngroup[jgroup];
+      ilist = glist[igroup];
+      jlist = glist[jgroup];
+
+      // re-test for no possible attempts
+      // could have changed due to reactions in previous group pairs
+
+      if (*ni == 0 || *nj == 0) continue;
+      if (igroup == jgroup && *ni == 1) continue;
+
+      if (NEARCP) {
+        nn_igroup = nn_last_partner_igroup;
+        if (igroup == jgroup) nn_jgroup = nn_last_partner_igroup;
+        else nn_jgroup = nn_last_partner_jgroup;
+        memset(nn_igroup,0,(*ni)*sizeof(int));
+        if (igroup != jgroup) memset(nn_jgroup,0,(*nj)*sizeof(int));
+      }
+
+      for (int iattempt = 0; iattempt < nattempt; iattempt++) {
+        i = *ni * random->uniform();
+        if (NEARCP) j = find_nn_group(i,ilist,*nj,jlist,plist,nn_igroup,nn_jgroup);
+        else {
+          j = *nj * random->uniform();
+          if (igroup == jgroup)
+            while (i == j) j = *nj * random->uniform();
         }
 
-          // 4. Use the xc values to get plasma parameters
-          PlasmaParams params = update->interpolatePlasmaData(xc.first, xc.second);
+        ipart = &particles[plist[ilist[i]]];
+        jpart = &particles[plist[jlist[j]]];
 
-          // 5. Continue with your existing code
-          double te = params.temp_e;
-          double ne = params.dens_e;
-          // std::chrono::high_resolution_clock::time_point t_interpolate_start = std::chrono::high_resolution_clock::now();
-          // printf("te: %f, ne: %f\n", te, ne);
-          process_particle(ipart, species, ispecies, te, ne);
-    
-    // }
+        // test if collision actually occurs
+        // continue to next collision if no reaction
+
+        if (!test_collision(icell,igroup,jgroup,ipart,jpart)) continue;
+
+        if (NEARCP) {
+          nn_igroup[i] = j+1;
+          nn_jgroup[j] = i+1;
+        }
+
+        // if recombination reaction is possible for this IJ pair
+        // pick a 3rd particle to participate and set cell number density
+        // unless boost factor turns it off, or there is no 3rd particle
+
+        if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
+          if (random->uniform() > react->recomb_boost_inverse)
+            react->recomb_species = -1;
+          else if (np <= 2)
+            react->recomb_species = -1;
+          else {
+            ii = ilist[i];
+            jj = jlist[j];
+            k = np * random->uniform();
+            while (k == ii || k == jj) k = np * random->uniform();
+            react->recomb_part3 = &particles[plist[k]];
+            react->recomb_species = react->recomb_part3->ispecies;
+            react->recomb_density = np * update->fnum / volume;
+          }
+        }
+
+        // perform collision and possible reaction
+
+        setup_collision(ipart,jpart);
+        reactflag = perform_collision(ipart,jpart,kpart);
+        ncollide_one++;
+        if (reactflag) nreact_one++;
+        else continue;
+
+        // ipart may now be in different group
+        // reset ilist,jlist after addgroup() in case it realloced glist
+
+        newgroup = species2group[ipart->ispecies];
+        if (newgroup != igroup) {
+          addgroup(newgroup,ilist[i]);
+          delgroup(igroup,i);
+          ilist = glist[igroup];
+          jlist = glist[jgroup];
+          // this line needed if jgroup=igroup and delgroup() moved J particle
+          if (jgroup == igroup && j == *ni) j = i;
+        }
+
+        // jpart may now be in different group or destroyed
+        // if new group: reset ilist,jlist after addgroup() in case it realloced glist
+        // if destroyed: delete from plist and group, add particle to deletion list
+
+        if (jpart) {
+          newgroup = species2group[jpart->ispecies];
+          if (newgroup != jgroup) {
+            addgroup(newgroup,jlist[j]);
+            delgroup(jgroup,j);
+            ilist = glist[igroup];
+            jlist = glist[jgroup];
+          }
+
+        } else {
+          if (ndelete == maxdelete) {
+            maxdelete += DELTADELETE;
+            memory->grow(dellist,maxdelete,"collide:dellist");
+          }
+          pindex = jlist[j];
+          dellist[ndelete++] = plist[pindex];
+
+          delgroup(jgroup,j);
+
+          plist[pindex] = plist[np-1];
+          p2g[pindex][0] = p2g[np-1][0];
+          p2g[pindex][1] = p2g[np-1][1];
+          if (pindex < np-1) glist[p2g[pindex][0]][p2g[pindex][1]] = pindex;
+          np--;
+
+          if (NEARCP) nn_jgroup[j] = nn_jgroup[*nj];
+        }
+
+        // if kpart created, add to plist and group list
+        // kpart was just added to particle list, so index = nlocal-1
+        // reset ilist,jlist after addgroup() in case it realloced
+        // particles data struct may also have been realloced
+
+        if (kpart) {
+          newgroup = species2group[kpart->ispecies];
+
+          if (NEARCP) {
+            if (newgroup == igroup || newgroup == jgroup) {
+              n = ngroup[newgroup];
+              set_nn_group(n);
+              nn_igroup = nn_last_partner_igroup;
+              if (igroup == jgroup) nn_jgroup = nn_last_partner_igroup;
+              else nn_jgroup = nn_last_partner_jgroup;
+              nn_igroup[n] = 0;
+              nn_jgroup[n] = 0;
+            }
+          }
+
+          if (np == npmax) {
+            npmax += DELTAPART;
+            memory->grow(plist,npmax,"collide:plist");
+            memory->grow(p2g,npmax,2,"collide:p2g");
+          }
+          plist[np++] = particle->nlocal-1;
+
+          addgroup(newgroup,np-1);
+          ilist = glist[igroup];
+          jlist = glist[jgroup];
+          particles = particle->particles;
+        }
+
+        // test to exit attempt loop due to groups becoming too small
+
+        if (*ni <= 1) {
+          if (*ni == 0) break;
+          if (igroup == jgroup) break;
+        }
+        if (*nj <= 1) {
+          if (*nj == 0) break;
+          if (igroup == jgroup) break;
+        }
+      }
+    }
+  }
 }
-
-    // GET time
-    // t2 = std::chrono::high_resolution_clock::now();
-    // double total_time = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1).count() / 1000000.;
-    // printf("Total time: %g\n", total_time);
-}
-
 
 /* ----------------------------------------------------------------------
    NTC algorithm for a single group with ambipolar approximation
@@ -820,26 +984,26 @@ void Collide::collisions_one_ambipolar()
 
       if (!test_collision(icell,0,0,ipart,jpart)) continue;
 
-      // // if recombination reaction is possible for this IJ pair
-      // // pick a 3rd particle to participate and set cell number density
-      // // unless boost factor turns it off, or there is no 3rd particle
-      // // 3rd particle cannot be an electron, so select from Np
+      // if recombination reaction is possible for this IJ pair
+      // pick a 3rd particle to participate and set cell number density
+      // unless boost factor turns it off, or there is no 3rd particle
+      // 3rd particle cannot be an electron, so select from Np
 
-      // if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
-      //   if (random->uniform() > react->recomb_boost_inverse)
-      //     react->recomb_species = -1;
-      //   else if (np == 1)
-      //     react->recomb_species = -1;
-      //   else if (np == 2 && jpart->ispecies != ambispecies)
-      //     react->recomb_species = -1;
-      //   else {
-      //     k = np * random->uniform();
-      //     while (k == i || k == j) k = np * random->uniform();
-      //     react->recomb_part3 = &particles[plist[k]];
-      //     react->recomb_species = react->recomb_part3->ispecies;
-      //     react->recomb_density = np * update->fnum / volume;
-      //   }
-      // }
+      if (recombflag && recomb_ijflag[ipart->ispecies][jpart->ispecies]) {
+        if (random->uniform() > react->recomb_boost_inverse)
+          react->recomb_species = -1;
+        else if (np == 1)
+          react->recomb_species = -1;
+        else if (np == 2 && jpart->ispecies != ambispecies)
+          react->recomb_species = -1;
+        else {
+          k = np * random->uniform();
+          while (k == i || k == j) k = np * random->uniform();
+          react->recomb_part3 = &particles[plist[k]];
+          react->recomb_species = react->recomb_part3->ispecies;
+          react->recomb_density = np * update->fnum / volume;
+        }
+      }
 
       // perform collision
       // ijspecies = species before collision chemistry
@@ -850,8 +1014,8 @@ void Collide::collisions_one_ambipolar()
       setup_collision(ipart,jpart);
       reactflag = perform_collision(ipart,jpart,kpart);
       ncollide_one++;
-      // if (reactflag) nreact_one++;
-      // else continue;
+      if (reactflag) nreact_one++;
+      else continue;
 
       // reset ambipolar ion flags due to collision
       // must do now before particle count reset below can break out of loop
@@ -1104,9 +1268,7 @@ void Collide::collisions_group_ambipolar()
     for (igroup = 0; igroup < ngroups; igroup++)
       for (jgroup = igroup; jgroup < ngroups; jgroup++) {
         if (igroup == egroup && jgroup == egroup) continue;
-        // printf("igroup = %d, jgroup = %d\n",igroup,jgroup);
         attempt = attempt_collision(icell,igroup,jgroup,volume);
-        // printf("attempt = %e\n",attempt);
         nattempt = static_cast<int> (attempt);
 
         if (nattempt) {
@@ -1888,115 +2050,4 @@ void Collide::set_nn_group(int n)
     memory->grow(nn_last_partner_igroup,max_nn,"collide:nn_last_partner");
     memory->grow(nn_last_partner_jgroup,max_nn,"collide:nn_last_partner");
   }
-}
-
-
-int Collide::getMaxChargeNumber(double molwt)
-{
-    if (molwt == 16.0) {
-        return 8;  // for Oxygen
-    } else if (molwt == 184.0) {
-        return 74;  // for Tungsten
-    } else {
-        printf("Invalid species mass\n");
-        exit(0);
-    }
-    return 0;  // Should not reach here
-}
-
-
-bool Collide::validateSpeciesChange(double molwt, int sp, int direction) {
-    if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
-                          (direction == 1 && sp >= 0 && sp <= 6))) {
-                            // printf("Valid species change\n");
-        return true;
-    } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
-        return true;
-    }
-    return false;
-}
-
-enum Material { W = 184, O = 16, INVALID = -1 };
-
-std::map<Material, RateData> rateDataCache;
-
-std::string getMaterialName(Material material) {
-    switch (material) {
-        case W: return "W";
-        case O: return "O";
-        default: return "INVALID";
-    }
-}
-
-
-void Collide::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
-    Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
-
-    // time this calculation
-    //  std::chrono::high_resolution_clock::time_point t1, t2;
-    // std::chrono::duration<double> duration;
-
-    // t1 = std::chrono::high_resolution_clock::now();  // Start the total process timer
-
-    // auto start = std::chrono::high_resolution_clock::now();
-
-    
-    // Ensure we have a valid material
-    if (material != W && material != O) {
-        printf("Invalid species mass\n");
-        exit(0);
-    }
-
-    // Load rate data only if not already cached
-
-    if (rateDataCache.find(material) == rateDataCache.end()) {
-        std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
-        rateDataCache[material] = readRateData(filename);
-    }
-
-    RateData& rateData = rateDataCache[material];
-    double charge = species[sp].charge;
-
-    // Convert te and ne to log10
-    double log10_te = log10(te);
-    double log10_ne = log10(ne);
-
-    double dt = update->dt;
-
-    RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
-    double ionization_rate = pow(10, rateResults.ionization);
-    double recombination_rate = pow(10, rateResults.recombination);
-
-    double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
-    double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
-
-
-    // Bound the values
-    react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
-    react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
-
-    double seed_ionization = dis(gen2);
-    double seed_recombination = dis(gen2);
-    // print the values
-    // printf("te: %g, ne: %g, ionization_rate: %g, recombination_rate: %g, react_prob_ioniziation: %g, react_prob_recombination: %g, seed_ionization: %g, seed_recombination: %g\n", te, ne, ionization_rate, recombination_rate, react_prob_ioniziation, react_prob_recombination, seed_ionization, seed_recombination);
-    if (react_prob_ioniziation > seed_ionization) {
-      // printf("Ionization\n");
-        if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
-            p->ispecies = sp - 1;
-        }
-    } else if (react_prob_recombination > seed_recombination) {
-      // printf("Recombination\n");
-        if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
-            p->ispecies = sp + 1;
-        }
-    }
-
-    if (material == W && charge == 5.0) {
-        p->ispecies = sp;
-    }
-        auto stop = std::chrono::high_resolution_clock::now();
-
-   // Calculate the duration and print it
-    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    // printf("Time taken for calculation: %lld microseconds\n", duration.count());
 }

@@ -18,21 +18,13 @@
 #include "pointers.h"
 #include "memory.h"
 #include "particle.h"
-#include "adasRatesInterpolator.h"
-#include <unordered_map>
-#include <tuple>
-#include <cmath>
-#include <unordered_map>
+
 namespace SPARTA_NS {
 
 #define DELTAPART 128
 
-
 class Collide : protected Pointers {
  public:
-
-double getRate(const std::string &material, int charge, int reactionType, double te) const;
-
   char *style;
   int rotstyle;       // none/smooth rotational modes
   int vibstyle;       // none/discrete/smooth vibrational modes
@@ -43,10 +35,6 @@ double getRate(const std::string &material, int charge, int reactionType, double
   bigint ncollide_running,nattempt_running,nreact_running;
 
   Collide(class SPARTA *, int, char **);
-
-    void initialize_coefficients(); // This function will populate coeffs_map
-
-
   virtual ~Collide();
   virtual void init();
   void modify_params(int, char **);
@@ -71,18 +59,9 @@ double getRate(const std::string &material, int charge, int reactionType, double
   virtual void add_grid_one();
   virtual void adapt_grid();
 
-  int getMaxChargeNumber(double );
-  bool validateSpeciesChange(double , int , int );
-
-  void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
-  double te, double ne); //, RateData &rateData);
-
-
   int ngroups;        // # of groups
 
  protected:
-
-
   int npmax;          // max # of particles in plist
   int *plist;         // list of particle indices for the entire cell
 
@@ -193,8 +172,33 @@ double getRate(const std::string &material, int charge, int reactionType, double
   void set_nn_group(int);
 };
 
-
 }
 
-
 #endif
+
+/* ERROR/WARNING messages:
+
+E: Collision mixture does not exist
+
+Self-explanatory.
+
+E: Collision mixture does not contain all species
+
+The specified mixture must contain all species in the simulation so
+that they can be assigned to collision groups.
+
+E: Must use Kokkos-supported collision style if Kokkos is enabled
+
+Self-explanatory.
+
+E: Cannot (yet) use KOKKOS package with 'collide_modify vibrate discrete'
+
+This feature is not yet supported.
+
+E: Illegal ... command
+
+Self-explanatory.  Check the input script syntax and compare to the
+documentation for the command.  You can use -echo screen as a
+command-line option when running SPARTA to see the offending line.
+
+*/

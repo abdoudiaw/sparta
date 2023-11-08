@@ -656,7 +656,7 @@ template < int NEARCP > void Collide::collisions_group()
 
   int step = update->ntimestep;
   // // printf("step: %d\n", step);
-  // if (step % 1000 == 0) { 
+  // if (step % 10 == 0) { 
   //   printf("step: %d\n", step);
 
     // 2. Start your loop

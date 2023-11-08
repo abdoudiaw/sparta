@@ -47,6 +47,9 @@
 #include <iostream>
 #include <string>
 #include <map>
+#include <map>
+#include <string>
+#include <utility>
 
 #include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
 // #include "/usr/include/eigen3/Eigen/Dense"
@@ -54,7 +57,8 @@
 #include <random>
 #include "math_const.h"
 #include "react_bird.h"
-
+#include <vector>
+#include <random>
 #include <gsl/gsl_interp2d.h>
 #include <gsl/gsl_spline2d.h>
 
@@ -63,6 +67,11 @@
 static const double eV2Kelvin = 11604.505;
 static const double kB = 1.38064852e-23;
 static const double protonCharge = 1.60217662e-19;
+
+#include <map>
+#include <string>
+
+
 
 using namespace SPARTA_NS;
 
@@ -104,6 +113,7 @@ const double Q = 1.60217662e-19;
 const double EPS0 = 8.854187e-12;
 const double MI = 1.6737236e-27;
 const double ME = 9.10938356e-31;
+// std::map<string, double> speciesMass = {{"O", 16.0}, {"W", 184.0}};
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -546,20 +556,42 @@ template < int DIM, int SURF, int OPT > void Update::move()
     double te = params.temp_e;
     double ne = params.dens_e;
     double flow = params.parr_flow;
-    
+    double log_te = log10(te);
+    double log_ne = log10(ne);
 
-    // / Start the timer just before calling the function
-// auto start_time = std::chrono::high_resolution_clock::now();
+    // get material name
+    std::string material;
+    double mass_amu = species[isp].molwt;
+    int chargeNumber = species[isp].charge;
 
-// process_particle(ipart, species, isp, te, ne);
+    if (mass_amu == OXYGEN_MASS) {
+      material = "O";
+      // printf("Species is O\n");
+    } else if (mass_amu == TUNGSTEN_MASS) {
+      material = "W";
+      // printf("Species is W\n");
+    } else {
+      // printf("Species is neither O nor W\n");
+    }
+  initializeData();
+  double IonizationRate = getIonizationRate(material, chargeNumber , log_te);
+  double RecombinationRate = getRecombinationRate(material, chargeNumber , log_te); 
+  // printf("IonizationRate = %g\n", IonizationRate);
+  // printf("RecombinationRate = %g\n", RecombinationRate);
+  double react_prob_ionized = 0;
+  double react_prob_recombined = 0;
 
-// Stop the timer right after the function returns
-// auto end_time = std::chrono::high_resolution_clock::now();
+  if (IonizationRate != 0) {
+       react_prob_ionized = computeReactionProbability(IonizationRate, dt,  ne) ;
+      //  printf("react_prob_ionized = %g\n", react_prob_ionized);
+  }
+  if (RecombinationRate != 0) {
+       react_prob_recombined = computeReactionProbability(RecombinationRate, dt,  ne) ;
+        // printf("RecombinationRate = %g\n", RecombinationRate);
+  }
 
-// Compute the elapsed time in seconds
-// double elapsed_time = std::chrono::duration<double, std::ratio<1, 1>>(end_time - start_time).count();
+process_particle(ipart, species, isp, react_prob_ionized, react_prob_recombined);
 
-// std::cout << "Time taken for process_particle: " << elapsed_time << " seconds." << std::endl;
 
 
       exclude = -1;
@@ -2622,94 +2654,132 @@ double Update::interp2dCombined(double x, double y, double z, int nx, int nz,
 
 
 
+bool Update::validateSpeciesChange(double molwt, int sp, int direction) {
+    if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
+                          (direction == 1 && sp >= 0 && sp <= 6))) {
+                            // printf("Valid species change\n");
+        return true;
+    } else if (molwt == 184.0 && sp >= 9 && sp <= 10) {
+        return true;
+    }
+    return false;
+}
 
-// int Update::getMaxChargeNumber(double molwt)
-// {
-//     if (molwt == 16.0) {
-//         return 8;  // for Oxygen
-//     } else if (molwt == 184.0) {
-//         return 74;  // for Tungsten
-//     } else {
-//         printf("Invalid species mass\n");
-//         exit(0);
-//     }
-//     return 0;  // Should not reach here
-// }
+enum Material { W = 184, O = 16, INVALID = -1 };
 
-
-// bool Update::validateSpeciesChange(double molwt, int sp, int direction) {
-//     if (molwt == 16.0 && ((direction == -1 && sp >= 1 && sp <= 8) || 
-//                           (direction == 1 && sp >= 0 && sp <= 6))) {
-//                             // printf("Valid species change\n");
-//         return true;
-//     } else if (molwt == 184.0 && sp >= 9 && sp <= 14) {
-//         return true;
-//     }
-//     return false;
-// }
-
-// enum Material { W = 184, O = 16, INVALID = -1 };
-
-// std::map<Material, RateData> rateDataCache;
-
-// std::string getMaterialName(Material material) {
-//     switch (material) {
-//         case W: return "W";
-//         case O: return "O";
-//         default: return "INVALID";
-//     }
-// }
+std::string getMaterialName(Material material) {
+    switch (material) {
+        case W: return "W";
+        case O: return "O";
+        default: return "INVALID";
+    }
+}
 
 
-// void Update::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double te, double ne) {
-//     Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
+void Update::process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double react_prob_ioniziation, double react_prob_recombination ) {
+  
+    Material material = static_cast<Material>(static_cast<int>(species[sp].molwt));
+    double charge =  species[sp].charge;
+    int chargeNumber = int (charge);
 
-//     // Ensure we have a valid material
-//     if (material != W && material != O) {
-//         printf("Invalid species mass\n");
-//         exit(0);
-//     }
+    // print species mass:
+    // Ensure we have a valid material
+    if (material != W && material != O) {
+          printf("species mass %g\n", species[sp].molwt);
+        printf("Invalid species mass\n");
+        exit(0);
+    }
 
-//     // Load rate data only if not already cached
-//     if (rateDataCache.find(material) == rateDataCache.end()) {
-//         std::string filename = "data/ADAS_Rates_" + getMaterialName(material) + ".h5";
-//         rateDataCache[material] = readRateData(filename);
-//     }
+    double seed_ionization = dist(gen);
+    double seed_recombination = dist(gen);
 
-//     RateData& rateData = rateDataCache[material];
-//     double charge = species[sp].charge;
 
-//     // Convert te and ne to log10
-//     double log10_te = log10(te);
-//     double log10_ne = log10(ne);
+    if (react_prob_ioniziation > seed_ionization) {
+        if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
+          // printf("Ionization for species material %s, charge %d\n", getMaterialName(material).c_str(), chargeNumber);
+            p->ispecies = sp - 1;
+        }
+    } else if (react_prob_recombination > seed_recombination) {
+      // species O o charge Z is recombinated to O o-1 charge Z-1
+      // printf("Recombination for species material %s, charge %d\n", getMaterialName(material).c_str(), chargeNumber);
+        if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
+            p->ispecies = sp + 1;
+        }
+    }
 
-//     double dt = update->dt;
+    if (material == W && chargeNumber == 1.0) {
+        p->ispecies = sp;
+    }
+}
 
-//     RateResults rateResults = interpolateRates(charge, log10_te, log10_ne, rateData, getMaterialName(material));
-//     double ionization_rate = pow(10, rateResults.ionization);
-//     double recombination_rate = pow(10, rateResults.recombination);
 
-//     double react_prob_ioniziation = 1.0 - exp(- ionization_rate * ne * dt);
-//     double react_prob_recombination = 1.0 - exp(- recombination_rate * ne * dt);
 
-//     // Bound the values
-//     react_prob_ioniziation = (react_prob_ioniziation >= 1.0) ? 0.0 : react_prob_ioniziation;
-//     react_prob_recombination = (react_prob_recombination >= 1.0) ? 0.0 : react_prob_recombination;
+std::map<std::pair<std::string, int>, IonizationParams> ionizationData;
+std::map<std::pair<std::string, int>, RecombinationParams> recombinationData;
+std::map<std::string, double> speciesMass = {{"O", 16.0}, {"W", 184.0}};
 
-//     double seed_ionization = dist(gen);
-//     double seed_recombination = dist(gen);
+void Update::initializeData() {
+  // W
+  ionizationData[{"W", 0}] = {189.360, -2.524, 81.304, 0.879, -390.324};
+  recombinationData[{"W",0}] = {0, 0, 0, 0, 0, 0};
 
-//     if (react_prob_ioniziation > seed_ionization) {
-//         if (validateSpeciesChange(species[sp].molwt, sp, -1)) {
-//             p->ispecies = sp - 1;
-//         }
-//     } else if (react_prob_recombination > seed_recombination) {
-//         if (validateSpeciesChange(species[sp].molwt, sp, 1)) {
-//             p->ispecies = sp + 1;
-//         }
-//     }
+  ionizationData[{"W",1}] = {710.729, -2.660, 176.554, 0.980, -1433.465};
+  recombinationData[{"W",1}] = {5011.403, -10.175, -223.970, -2.809, -1.319, -5021.199};
+  
+  // O
+  ionizationData[{"O", 0}]  = {613.579, -2.976, 169.458, 0.861, -1239.458};
+  recombinationData[{"O", 0}]  = {0, 0, 0, 0, 0, 0};
 
-//     if (material == W && charge == 5.0) {
-//         p->ispecies = sp;
-//     }
-// }
+
+  recombinationData[{"O", 1}]  = {4.756, 1.342, 1.715, 0.494, -12.352, -22.795};
+  ionizationData[{"O", 1}]  = {3301.682, -2.956, 454.573, 1.012, -6616.325};
+  recombinationData[{"O", 2}]  = {4.829, 1.428, 1.752, 0.760, -6.854, -22.165};
+  ionizationData[{"O", 2}]  = {8374.239, -3.055, 804.771, 1.064, -16761.844};
+  recombinationData[{"O", 3}]  = {4.858, 1.435, 1.791, 0.907, -5.509, -21.892};
+  ionizationData[{"O", 3}] = {18034.513, -3.202, 1258.530, 1.083, -36082.759};
+  recombinationData[{"O", 4}]  = {5.125, 1.400, 1.960, 0.856, -5.032, -21.977};
+  ionizationData[{"O", 4}]  = {157757.950, -3.080, -596438.890, 1.391, -315530.793};
+  recombinationData[{"O", 5}]  = {2.752, 1.714, 1.826, 1301.062, -0.000, -1319.907};
+  ionizationData[{"O", 5}]  = {322.902, -0.805, -95718.176, 1.319, -660.927};
+  recombinationData[{"O", 6}]  = {1.288, 3.010, 0.688, 8.689, -0.099, -25.389};
+  ionizationData[{"O", 6}]  = {32.985, 1.055, 44528.095, 2.610, -82.797};
+  recombinationData[{"O", 7}]  = {0.957, 3.077, 0.671, 4273.027, -0.000, -4289.517};
+  ionizationData[{"O", 7}]  = {32.476, 1.139, 39887.784, 2.771, -82.280};
+  recombinationData[{"O", 8}]  = {2.841, 3.510, 3.642, 1044.343, -0.001, -1062.492};
+  ionizationData[{"O", 8}]  = {0, 0, 0, 0, 0};
+}
+
+
+double Update::getIonizationRate(std::string material, int charge, double x) {
+    // Gaussian function part
+    IonizationParams params = ionizationData[{material, charge}];  // Corrected key
+    // double a, double x0, double sigma, double alpha, double y0
+    double a = params.a;
+    double x0 = params.x0;
+    double sigma = params.sigma;
+    double alpha = params.alpha;
+    double y0 = params.y0;
+    double gauss = std::exp(-std::pow(x - x0, 2) / (2 * std::pow(sigma, 2)));
+    
+    // Error function to introduce skew
+    double erf = 1 + std::tanh(alpha * (x - x0));
+    
+    return y0 + a * gauss * erf;
+}
+
+
+double Update::getRecombinationRate(std::string material, int charge, double x) {
+    RecombinationParams params = recombinationData[{material, charge}];  // Corrected key
+    return  params.a1 * exp(-pow(x - params.x0, 2) / (2 * pow(params.sigma, 2)))   + params.a2 * exp(params.k * x) + params.b; 
+}
+
+double Update::computeReactionProbability(double rate, double dt, double ne) {
+    double computedRate = pow(10, rate);
+    const double EPSILON = 0.0; // Small epsilon value to check for precision
+
+    if (computedRate == EPSILON) {
+        return 0.0;
+    }
+
+    return computedRate * dt * ne - pow(computedRate * dt * ne, 2) / 2.0;
+}

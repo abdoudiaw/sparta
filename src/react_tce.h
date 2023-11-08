@@ -29,9 +29,12 @@ namespace SPARTA_NS {
 class ReactTCE : public ReactBird {
  public:
   ReactTCE(class SPARTA *, int, char **);
-  void init();
-  int attempt(Particle::OnePart *, Particle::OnePart *,
-              double, double, double, double &, int &);
+   void init();
+   int attempt(Particle::OnePart *, Particle::OnePart *,
+   double, double, double, double &, int &);
+   double IonizationRate(double , double , double , double , double , double );
+
+   double RecombinationRate(double , double , double , double , double , double , double );
 };
 
 }

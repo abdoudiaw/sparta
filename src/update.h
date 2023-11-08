@@ -25,10 +25,20 @@
 #include "particle.h"
 #include <fstream> // for std::ifstream
 #include <iostream> // for std::cerr and std::endl
+#include <map>
+#include <string>
 
 using namespace std;
 
 namespace SPARTA_NS {
+struct IonizationParams {
+    double a, x0, sigma, alpha,  y0;
+};
+
+struct RecombinationParams {
+    double a1, x0, sigma, a2, k, b ; // a1, a2, x0, sigma, k, b;
+};
+
 
 struct PointRZ {
     float x;
@@ -277,12 +287,14 @@ PlasmaParams interpolate(const PlasmaData2& lower, const PlasmaData2& upper, dou
 //     z_double.assign(plasma_data.z.begin(), plasma_data.z.end());
 // }
 
-//   int getMaxChargeNumber(double );
-//   bool validateSpeciesChange(double , int , int );
+  int getMaxChargeNumber(double );
+  bool validateSpeciesChange(double , int , int );
 
-//   void process_particle(Particle::OnePart *p, Particle::Species *species, int sp,
+//   void process_particle(Particle::OnePart *p, Particle::Species *species, int sp);
+//   void process_particle(Particle::OnePart *p, Particle::Species *species, int sp) ; //, double react_prob_recombination, double  react_prob_ioniziation);
 //   double te, double ne); //, RateData &rateData);
-
+void process_particle(Particle::OnePart *p, Particle::Species *species, int sp, double react_prob_ioniziation, double react_prob_recombination );
+double computeReactionProbability(double rate, double dt, double ne); 
 
 // void getNeighboringPoints(const Point& closestPoint, Point& previousPoint, Point& nextPoint, const std::vector<Point>& points) const;
 
@@ -429,12 +441,16 @@ std::array<double, 3> potential_brooks(double *xc, const PlasmaParams params) co
   void field_per_particle(int, int, double, double *, double *);
   void field_per_grid(int, int, double, double *, double *);
 
-  //
-
 //   void pusher_boris3D(double *xc, double *x, double *v, double *xnew, double charge, double mass, double dt, PlasmaParams params,  double *E, double *B);
     void pusher_boris2D(double *, double *, double *, double *, double , double , double, double *, double *);
     void pusher_boris3D(double *, double *, double *, double *, double , double , double, double *, double *);
 
+    // double getIonizationRate(const int species, double x) ; 
+    // double getRecombinationRate(const int species, double x) ;
+    double getIonizationRate(std::string material, int charge, double x);
+    double getRecombinationRate(std::string material, int charge, double x);
+
+    void initializeData();
    std::vector<DataPointReflectionSputtering> loadDataSurfaceData(const std::string& filename); // Helper function to load the data from the file
 
    std::string cachedFilename;  // <-- Add this line
@@ -446,6 +462,9 @@ std::array<double, 3> potential_brooks(double *xc, const PlasmaParams params) co
 }
 
 #endif
+
+
+
 
 /* ERROR/WARNING messages:
 

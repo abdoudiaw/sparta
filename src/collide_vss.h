@@ -23,7 +23,6 @@ CollideStyle(vss,CollideVSS)
 
 #include "collide.h"
 #include "particle.h"
-#include "adasRatesInterpolator.h"
 
 namespace SPARTA_NS {
 
@@ -41,11 +40,6 @@ class CollideVSS : public Collide {
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                         Particle::OnePart *&);
   double extract(int, int, const char *);
-
-  // int getMaxChargeNumber(double );
-  // bool validateSpeciesChange(double , int , int );
-  // void process_particle(Particle::OnePart *, Particle::Species *, int ,
-  //                                 double , double , RateData &);
 
   struct State {      // two-particle state
     double vr2;

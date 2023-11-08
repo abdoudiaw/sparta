@@ -240,12 +240,11 @@ double random_prob = random->uniform();
     refl =   wierzbicki_biersack(target_Z1, target_M1, ion_Z, ion_M, energy_incident_eV);
     sput=  yamamura(target_Z1, target_M1, ion_Z, ion_M, energy_incident_eV);
     }else{
-        refl = params2.rfyld;
+      refl = params2.rfyld;
       sput = params2.spyld;
     }
     
-    
-
+  
     double reflection_coefficient = refl; //
     double sputtering_coefficient = sput; 
     double react_prob_reflection = 0.0;
@@ -253,8 +252,7 @@ double random_prob = random->uniform();
 
     double total_coefficient = reflection_coefficient + sputtering_coefficient;
 // printf("total_coefficient = %g\n",total_coefficient);
-// printf("reflection_coefficient = %g\n",reflection_coefficient);
-// printf("sputtering_coefficient = %g\n",sputtering_coefficient);
+
 
 if (total_coefficient == 0.0) {
     // Assuming you want to set both to zero if total_coefficient is zero
@@ -273,29 +271,37 @@ if (total_coefficient == 0.0) {
         react_prob_sputtering = sputtering_coefficient / total_coefficient;
     }
 }
+// printf("reflection_coefficient = %g\n",reflection_coefficient);
+// printf("sputtering_coefficient = %g\n",sputtering_coefficient);
 
-    if (total_coefficient  <=0){
-      // printf("total_coefficient = %g\n",total_coefficient);
 
+// total_coefficient =1; 
+// react_prob_sputtering = 1;
+// react_prob_sputtering =0;
+    // if (total_coefficient  <=0){
+    //   // printf("total_coefficient = %g\n",total_coefficient);
 
-        // for (int j = 0; j < 3; j++) {
-        //   v3[j] = 0.0;
-        // }
-        // memcpy(ip->v,v3,3*sizeof(double));
-        // return 0;
+    //     // for (int j = 0; j < 3; j++) {
+    //     //   v3[j] = 0.0;
+    //     // }
+    //     // memcpy(ip->v,v3,3*sizeof(double));
+    //     // return 0;
 
         
 
-        // remove particle
-        ip = NULL;
-        // printf("removing particle\n");
-        return 0;
+    //     // remove particle
+    //     ip = NULL;
+    //     // printf("removing particle\n");
+    //     return 0;
 
-    }
-    else{    
+    // }
+    // else{    
+      
+      // printf("react_prob_sputtering", react_prob_sputtering);
+      // printf("random_prob", random_prob);
       nsingle++;
       tally_single[list[i]]++;
-     if (react_prob_sputtering > random_prob) { 
+     if (react_prob_sputtering > random_prob && total_coefficient > 0) { 
       switch (r->type) {
        case DISSOCIATION:
         {
@@ -342,7 +348,7 @@ if (total_coefficient == 0.0) {
         // printf("neutralizing to oxygen\n");
         ip->ispecies = 8;
       }
-      if (mass == 184.0) ip->ispecies = 14;
+      if (mass == 184.0) ip->ispecies = 10;
       //  printf("reflected species id = %d\n",ip->ispecies);
       double charge2 = particle->species[ip->ispecies].charge;
       double mass2 = particle->species[ip->ispecies].molwt  ;
@@ -364,7 +370,7 @@ if (total_coefficient == 0.0) {
         return (list[i] + 1);
   }
   }
-    }
+
   return 0;
 }
 
