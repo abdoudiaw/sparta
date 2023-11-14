@@ -1,0 +1,113 @@
+find: /usr/sbin/authserver: Permission denied
+find: /usr/local/elastic/metricbeat/data: Permission denied
+find: /usr/local/elastic/auditbeat/logs: Permission denied
+find: /usr/local/elastic/auditbeat/data: Permission denied
+find: /Library/Application Support/Apple/Screen Sharing/Keys: Permission denied
+find: /Library/Application Support/Apple/ParentalControls/Users: Permission denied
+find: /Library/Application Support/Apple/AssetCache/Data: Permission denied
+find: /Library/Application Support/Apple/Remote Desktop/Task Server: Permission denied
+find: /Library/Application Support/Apple/Remote Desktop/Client: Permission denied
+find: /Library/Application Support/ApplePushService: Permission denied
+find: /Library/Application Support/Google/GoogleUpdater/121.0.6116.0/Crashpad: Permission denied
+find: /Library/Application Support/JAMF/run: Permission denied
+find: /Library/Application Support/JAMF/Downloads: Permission denied
+find: /Library/Application Support/JAMF/tmp: Permission denied
+find: /Library/Application Support/com.apple.TCC: Operation not permitted
+find: /Library/Preferences/OpenDirectory/DynamicData/Active Directory: Permission denied
+find: /Library/NessusAgent/run/var/nessus/audits: Permission denied
+find: /Library/NessusAgent/run/var/nessus/triggers: Permission denied
+find: /Library/NessusAgent/run/var/nessus/CA: Permission denied
+find: /Library/NessusAgent/run/var/nessus/www: Permission denied
+find: /Library/NessusAgent/run/var/nessus/users/nessus_ms_agent: Permission denied
+find: /Library/NessusAgent/run/var/nessus/autoscanconfigs: Permission denied
+find: /Library/NessusAgent/run/var/nessus/tmp: Permission denied
+find: /Library/NessusAgent/run/var/nessus/backups: Permission denied
+find: /Library/NessusAgent/run/var/nessus/remote: Permission denied
+find: /Library/Endgame/.equarantine: Permission denied
+find: /Library/Caches/com.google.GoogleUpdater: Permission denied
+find: /Library/Caches/com.google.SoftwareUpdate.0: Permission denied
+find: /Library/Caches/Desktop Pictures/24CFF475-29CA-49EC-92B5-1314E5B97E4A: Permission denied
+find: /Library/Caches/Desktop Pictures/EB7154D9-FD58-41ED-9856-A9DFF7D55290: Permission denied
+find: /Library/Caches/com.apple.iconservices.store: Permission denied
+find: /Library/Caches/com.apple.aned: Operation not permitted
+find: /System/Library/DirectoryServices/DefaultLocalDB/Default: Permission denied
+find: /System/Library/Templates/Data/Library/Application Support/Apple/ParentalControls/Users: Permission denied
+find: /System/Library/Templates/Data/Library/Application Support/com.apple.TCC: Operation not permitted
+find: /System/Library/Templates/Data/private/etc/cups/certs: Permission denied
+find: /System/Library/Templates/Data/private/var/install: Permission denied
+find: /System/Library/Templates/Data/private/var/ma: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/mqueue: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/saved: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/trace: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/defer: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/flush: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/deferred: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/corrupt: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/public: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/private: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/incoming: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/active: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/maildrop: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/hold: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/postfix/bounce: Permission denied
+find: /System/Library/Templates/Data/private/var/spool/cups: Permission denied
+find: /System/Library/Templates/Data/private/var/jabberd: Permission denied
+find: /System/Library/Templates/Data/private/var/audit: Permission denied
+find: /System/Library/Templates/Data/private/var/root: Permission denied
+find: /System/Library/Templates/Data/private/var/lib/postfix: Permission denied
+find: /System/Library/Templates/Data/private/var/db/appinstalld: Permission denied
+find: /System/Library/Templates/Data/private/var/db/diskimagesiod: Permission denied
+find: /System/Library/Templates/Data/private/var/db/locationd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/sysdiagnose/com.apple.sysdiagnose: Permission denied
+find: /System/Library/Templates/Data/private/var/db/analyticsd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/rmd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/knowledgegraphd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/coreml: Permission denied
+find: /System/Library/Templates/Data/private/var/db/nsurlsessiond: Permission denied
+find: /System/Library/Templates/Data/private/var/db/fpsd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/hidd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/installcoordinationd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/geod: Permission denied
+find: /System/Library/Templates/Data/private/var/db/oah: Operation not permitted
+find: /System/Library/Templates/Data/private/var/db/reportmemoryexception: Permission denied
+find: /System/Library/Templates/Data/private/var/db/Sandbox: Permission denied
+find: /System/Library/Templates/Data/private/var/db/lockdown: Permission denied
+find: /System/Library/Templates/Data/private/var/db/biome: Permission denied
+find: /System/Library/Templates/Data/private/var/db/datadetectors: Permission denied
+find: /System/Library/Templates/Data/private/var/db/cmiodalassistants: Permission denied
+find: /System/Library/Templates/Data/private/var/db/com.apple.xpc.roleaccountd.staging: Permission denied
+find: /System/Library/Templates/Data/private/var/db/dslocal/nodes/Default: Permission denied
+find: /System/Library/Templates/Data/private/var/db/nearbyd: Permission denied
+find: /System/Library/Templates/Data/private/var/db/mmaintenanced: Permission denied
+find: /System/Library/Templates/Data/private/var/db/timed: Permission denied
+find: /System/Library/Templates/Data/private/var/db/applepay: Permission denied
+find: /System/Library/Templates/Data/private/var/db/darwindaemon: Permission denied
+find: /System/Library/Templates/Data/private/var/db/securityagent: Permission denied
+find: /System/Library/Templates/Data/private/var/db/accessoryupdater: Permission denied
+find: /System/Library/Templates/Data/private/var/db/ConfigurationProfiles/Store: Permission denied
+find: /System/Library/Templates/Data/private/var/db/caches/opendirectory: Permission denied
+find: /System/Library/Templates/Data/private/var/at/tabs: Permission denied
+find: /System/Library/Templates/Data/private/var/at/tmp: Permission denied
+find: /System/Library/Templates/Data/private/var/backups: Permission denied
+find: /System/Library/Templates/Data/private/var/agentx: Permission denied
+find: /System/Library/Caches/com.apple.appstored: Permission denied
+find: /System/Library/Caches/com.apple.coresymbolicationd: Permission denied
+find: /System/Volumes/Update/Hardware: Permission denied
+find: /System/Volumes/Update/Controller: Permission denied
+find: /System/Volumes/Preboot/com.apple.security.cryptexd: Operation not permitted
+find: /System/Volumes/Data/usr/local/elastic/metricbeat/data: Permission denied
+find: /System/Volumes/Data/usr/local/elastic/auditbeat/logs: Permission denied
+find: /System/Volumes/Data/usr/local/elastic/auditbeat/data: Permission denied
+find: /System/Volumes/Data/.Spotlight-V100: No such file or directory
+find: /System/Volumes/Data/.adobeTemp: No such file or directory
+find: /System/Volumes/Data/Library/Application Support/Apple/Screen Sharing/Keys: Permission denied
+find: /System/Volumes/Data/Library/Application Support/Apple/ParentalControls/Users: Permission denied
+find: /System/Volumes/Data/Library/Application Support/Apple/AssetCache/Data: Permission denied
+find: /System/Volumes/Data/Library/Application Support/Apple/Remote Desktop/Task Server: Permission denied
+find: /System/Volumes/Data/Library/Application Support/Apple/Remote Desktop/Client: Permission denied
+find: /System/Volumes/Data/Library/Application Support/ApplePushService: Permission denied
+find: /System/Volumes/Data/Library/Application Support/Google/GoogleUpdater/121.0.6116.0/Crashpad: Permission denied
+find: /System/Volumes/Data/Library/Application Support/JAMF/run: Permission denied
+find: /System/Volumes/Data/Library/Application Support/JAMF/Downloads: Permission denied
+find: /System/Volumes/Data/Library/Application Support/JAMF/tmp: Permission denied
+find: /System/Volumes/Data/Library/Application Support/com.apple.TCC: Operation not permitted
